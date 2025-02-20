@@ -5,12 +5,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { UserService } from '../user/user.service';
-import { RegisterDTO } from './dto/register.dto';
 import * as argon2 from 'argon2';
 import { ResponseData } from 'src/helpers/response.helper';
 import { LoginDTO } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { CreateUserDTO } from '../user/dto/create-user.dto';
 
 @Injectable()
 export class AuthService {
@@ -47,18 +47,8 @@ export class AuthService {
     return await argon2.verify(hashedPassword, plainTextPassword);
   }
 
-  async register(registrationData: RegisterDTO) {
-    const hashedPassword = await argon2.hash(registrationData.password);
-    try {
-      const createdUser = await this.userService.create({
-        username: registrationData.username,
-        password: hashedPassword,
-      });
-      // createdUser.password = undefined;
-      return createdUser;
-    } catch (error) {
-      throw new InternalServerErrorException('User already exists');
-    }
+  async register(registrationData: CreateUserDTO) {
+    return await this.userService.createUser(registrationData);
   }
   async login(loginData: LoginDTO) {
     const user = await this.userService.findByUsername(loginData.username);
@@ -74,13 +64,18 @@ export class AuthService {
     }
     return ResponseData.success(user, 'Login successful');
   }
-  public getCookieWithJwtToken(
-    userId: string,
-    username?: string,
-    role?: string,
-  ) {
-    const payload: TokenPayload = { userId, username, role };
-    const token = this.jwtService.sign(payload);
+
+  async validateJwtUser(UserId: string) {
+    const user = await this.userService.findById(UserId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    const currentUser = { id: user.id, username: user.username };
+    return currentUser;
+  }
+  async getCookieWithJwtToken(userId: string) {
+    const payload: TokenPayload = { sub: userId };
+    const token = await this.jwtService.signAsync(payload);
     return `Authentication=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get('JWT_EXPIRATION_TIME')}`;
   }
 

@@ -3,41 +3,46 @@ import {
   Controller,
   Get,
   HttpCode,
+  HttpStatus,
   Post,
   Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { RegisterDTO } from './dto/register.dto';
 import { LocalAuthGuard } from './guard/local-auth.guard';
 import { ResponseData } from 'src/helpers/response.helper';
 import { Response } from 'express';
 import RequestWithUser from './interface/requestWithUser.interface';
 import JwtAuthGuard from './guard/jwt-auth.guard';
+import { CreateUserDTO } from '../user/dto/create-user.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  async register(@Body() registerData: RegisterDTO) {
-    return ResponseData.success(await this.authService.register(registerData));
+  async register(@Body() createUserData: CreateUserDTO) {
+    return ResponseData.success(
+      await this.authService.register(createUserData),
+    );
   }
   @HttpCode(200)
   @UseGuards(LocalAuthGuard)
   @Post('login')
-  async logIn(@Req() request: RequestWithUser, @Res() response: Response) {
+  async logIn(@Req() request: RequestWithUser) {
     const { user } = request;
-    const cookie = this.authService.getCookieWithJwtToken(user.id);
-    response.setHeader('Set-Cookie', cookie);
+    const cookie = await this.authService.getCookieWithJwtToken(user.id);
+    if (request.res) {
+      request.res.setHeader('Set-Cookie', cookie);
+    }
     user.password = '';
-    return response.send(user);
+    return ResponseData.success(user);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  async logOut(@Req() request: RequestWithUser, @Res() response: Response) {
+  async logOut(@Res() response: Response) {
     response.setHeader('Set-Cookie', this.authService.getCookieForLogOut());
     return response.sendStatus(200);
   }

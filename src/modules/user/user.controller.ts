@@ -11,10 +11,10 @@ export class UserController {
   getUsers(): Promise<UserResponseDto[]> {
     return this.userService.findAll();
   }
-  @Post('/:id')
-  getUser(@Param('id') id: string) {
-    return this.userService.getById(id);
-  }
+  // @Post('/:id')
+  // getUser(@Param('id') id: string) {
+  //   return this.userService.getById(id);
+  // }
 
   // @Put('/:id')
   // updateUser(
