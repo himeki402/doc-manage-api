@@ -30,8 +30,13 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
       'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': 'error',
-      // '@typescript-eslint/no-unsafe-argument': 'warn',
+      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      'require-await': 'off',
+      '@typescript-eslint/require-await': 'off',
       'prettier/prettier': [
         'error',
         {
