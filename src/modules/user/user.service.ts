@@ -3,14 +3,16 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
 import * as argon2 from 'argon2';
-import { plainToInstance } from 'class-transformer';
 import { CreateUserDTO } from './dto/create-user.dto';
 import { UserResponseDto } from './dto/response-user.dto';
+import { UserUpdateDTO } from './dto/update-user.dto';
+import { plainToInstance } from 'class-transformer';
 
 @Injectable()
 export class UserService {
@@ -25,10 +27,12 @@ export class UserService {
       excludeExtraneousValues: true,
     });
   }
-  async findById(userId: string) {
+  async findById(userId: string): Promise<UserResponseDto> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (user) {
-      return user;
+      return plainToInstance(UserResponseDto, user, {
+        excludeExtraneousValues: true,
+      });
     }
     throw new HttpException(
       'User with this id does not exist',
@@ -36,28 +40,69 @@ export class UserService {
     );
   }
 
-  findByUsername(username: string): Promise<UserResponseDto | null> {
-    return this.userRepository.findOne({ where: { username } });
+  async findByUsername(username: string): Promise<UserResponseDto> {
+    const user = await this.userRepository.findOne({ where: { username } });
+    if (user) {
+      return plainToInstance(UserResponseDto, user, {
+        excludeExtraneousValues: true,
+      });
+    }
+    throw new HttpException(
+      'User with this username does not exist',
+      HttpStatus.NOT_FOUND,
+    );
   }
-  //Tạo mới(Đăng kí user)
-  async createUser(userData: CreateUserDTO): Promise<UserResponseDto | null> {
-    const { username, name, password } = userData;
+
+  async findByUsernameWithPassword(username: string): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: { username },
+      select: ['id', 'name', 'username', 'password'],
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
+  }
+
+  async createUser(userData: CreateUserDTO): Promise<UserResponseDto> {
+    const { name, username, password } = userData;
     const existingUser = await this.userRepository.findOne({
-      where: [{ username }],
+      where: { username },
     });
     if (existingUser) {
       throw new ConflictException('Username already exists');
     }
     const hashedPassword = await argon2.hash(userData.password);
-    // Tạo user mới
     const user = this.userRepository.create({
-      name: userData.name,
-      username: userData.username,
+      name,
+      username,
       password: hashedPassword,
     });
-    return this.userRepository.save(user);
+    const savedUser = this.userRepository.save(user);
+    return plainToInstance(UserResponseDto, savedUser, {
+      excludeExtraneousValues: true,
+    });
   }
-  async updateUser(id: number, userData: Partial<User>) {
-    await this.userRepository.update(id, userData);
+  async updateUser(
+    id: string,
+    userData: UserUpdateDTO,
+  ): Promise<UserResponseDto> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (userData.name) {
+      user.name = userData.name;
+    }
+    // if (userData.email) {
+    //   user.email = userData.email;
+    // }
+    if (userData.password) {
+      user.password = await argon2.hash(userData.password);
+    }
+    const updatedUser = await this.userRepository.save(user);
+    return plainToInstance(UserResponseDto, updatedUser, {
+      excludeExtraneousValues: true,
+    });
   }
 }

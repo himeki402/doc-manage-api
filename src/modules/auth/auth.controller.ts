@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   HttpCode,
@@ -22,29 +24,59 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  async register(@Body() createUserData: CreateUserDTO) {
-    return ResponseData.success(
-      await this.authService.register(createUserData),
-    );
+  async register(
+    @Body() createUserData: CreateUserDTO,
+    @Res() response: Response,
+  ) {
+    try {
+      const { user, token } = await this.authService.register(createUserData);
+      const cookie = await this.authService.assignJwtToCookie(token);
+      response.setHeader('Set-Cookie', cookie);
+      response.status(HttpStatus.CREATED).json({
+        statusCode: HttpStatus.CREATED,
+        message: 'User registered successfully',
+        data: { user, token },
+      });
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        response.status(HttpStatus.CONFLICT).json({
+          statusCode: HttpStatus.CONFLICT,
+          message: error.message,
+        });
+      } else if (error instanceof BadRequestException) {
+        response.status(HttpStatus.BAD_REQUEST).json({
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: error.message,
+        });
+      } else {
+        response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: 'Internal server error',
+        });
+      }
+    }
   }
   @HttpCode(200)
   @UseGuards(LocalAuthGuard)
   @Post('login')
   async logIn(@Req() request: RequestWithUser) {
-    const { user } = request;
-    const cookie = await this.authService.getCookieWithJwtToken(user.id);
-    if (request.res) {
-      request.res.setHeader('Set-Cookie', cookie);
+    try {
+      const { user } = request;
+      const cookie = await this.authService.getCookieWithJwtToken(user.id);
+      if (request.res) {
+        request.res.setHeader('Set-Cookie', cookie);
+      }
+      return ResponseData.success(user, 'User logged in successfully');
+    } catch (error) {
+      return ResponseData.error(error.message, error.statusCode);
     }
-    user.password = '';
-    return ResponseData.success(user);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   async logOut(@Res() response: Response) {
     response.setHeader('Set-Cookie', this.authService.getCookieForLogOut());
-    return response.sendStatus(200);
+    response.sendStatus(200);
   }
 
   @UseGuards(JwtAuthGuard)

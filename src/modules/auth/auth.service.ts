@@ -11,6 +11,8 @@ import { LoginDTO } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { CreateUserDTO } from '../user/dto/create-user.dto';
+import { UserResponseDto } from '../user/dto/response-user.dto';
+import { plainToInstance } from 'class-transformer';
 
 @Injectable()
 export class AuthService {
@@ -20,13 +22,15 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
-  async getAuthenticatedUser(username: string, plainTextPassword: string) {
+  async getAuthenticatedUser(
+    username: string,
+    plainTextPassword: string,
+  ): Promise<UserResponseDto> {
     try {
-      const user = await this.userService.findByUsername(username);
+      const user = await this.userService.findByUsernameWithPassword(username);
       if (!user) {
         throw new NotFoundException('User not found');
       }
-
       const isPasswordValid = await this.verifyPassword(
         plainTextPassword,
         user.password,
@@ -34,9 +38,18 @@ export class AuthService {
       if (!isPasswordValid) {
         throw new UnauthorizedException('Invalid password');
       }
-      return user;
+      return plainToInstance(UserResponseDto, user, {
+        excludeExtraneousValues: true,
+      });
     } catch (error) {
-      throw new InternalServerErrorException('Authentication failed');
+      if (
+        error instanceof NotFoundException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      } else {
+        throw new InternalServerErrorException('Authentication failed');
+      }
     }
   }
 
@@ -47,11 +60,19 @@ export class AuthService {
     return await argon2.verify(hashedPassword, plainTextPassword);
   }
 
-  async register(registrationData: CreateUserDTO) {
-    return await this.userService.createUser(registrationData);
+  async register(
+    registrationData: CreateUserDTO,
+  ): Promise<{ user: UserResponseDto; token: string }> {
+    const user = await this.userService.createUser(registrationData);
+
+    const payload: TokenPayload = { sub: user.id };
+    const token = await this.jwtService.signAsync(payload);
+    return { user, token };
   }
   async login(loginData: LoginDTO) {
-    const user = await this.userService.findByUsername(loginData.username);
+    const user = await this.userService.findByUsernameWithPassword(
+      loginData.username,
+    );
     if (!user) {
       throw new UnauthorizedException();
     }
@@ -72,6 +93,9 @@ export class AuthService {
     }
     const currentUser = { id: user.id, username: user.username };
     return currentUser;
+  }
+  async assignJwtToCookie(token: string) {
+    return `Authentication=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get('JWT_EXPIRATION_TIME')}`;
   }
   async getCookieWithJwtToken(userId: string) {
     const payload: TokenPayload = { sub: userId };

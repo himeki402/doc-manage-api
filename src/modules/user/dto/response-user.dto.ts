@@ -1,14 +1,13 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Expose } from 'class-transformer';
+import { BaseDto } from 'src/common/dto/base.dto';
 
-export class UserResponseDto {
+export class UserResponseDto extends BaseDto {
   @Expose()
-  id: string;
-
-  @Expose()
+  @ApiProperty()
   username: string;
 
+  @ApiProperty()
   @Expose()
-  created_at: Date;
-
-  password: string;
+  name: string;
 }
