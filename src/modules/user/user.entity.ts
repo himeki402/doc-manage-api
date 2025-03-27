@@ -1,7 +1,7 @@
 import { Exclude } from 'class-transformer';
 import { BaseEntity } from 'src/common/entities/base.entity';
-import { Column, Entity } from 'typeorm';
-import { v4 as uuidv4 } from 'uuid';
+import { Column, Entity, OneToMany } from 'typeorm';
+import { Document } from '../document/document.entity';
 @Entity('users')
 export class User extends BaseEntity {
   @Column()
@@ -16,4 +16,7 @@ export class User extends BaseEntity {
 
   // @Column()
   // role: string;
+
+  @OneToMany(() => Document, (documents) => documents.createdBy)
+  documents: Document[];
 }

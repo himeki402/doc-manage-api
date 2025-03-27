@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Expose, plainToInstance } from 'class-transformer';
+import { Expose } from 'class-transformer';
 
 export class BaseDto {
   @ApiProperty()

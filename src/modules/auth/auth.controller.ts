@@ -18,6 +18,7 @@ import { Response } from 'express';
 import RequestWithUser from './interface/requestWithUser.interface';
 import JwtAuthGuard from './guard/jwt-auth.guard';
 import { CreateUserDTO } from '../user/dto/create-user.dto';
+// import { Public } from 'src/decorator/public.decorator';
 
 @Controller('auth')
 export class AuthController {

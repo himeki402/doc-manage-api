@@ -11,6 +11,10 @@ async function bootstrap() {
   app.use(cookieParser());
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  app.enableCors({
+    origin: 'http://localhost:8080',
+    credentials: true,
+  });
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('API for DATN')
@@ -20,7 +24,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api', app, document);
 
-  const port = configService.get('PORT') ?? 3000;
+  const port = configService.get('PORT') ?? 8080;
   await app.listen(port);
 }
 bootstrap();

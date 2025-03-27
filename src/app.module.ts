@@ -4,6 +4,10 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './modules/database/database.module';
+import { APP_GUARD } from '@nestjs/core';
+import { DocumentModule } from './modules/document/document.module';
+import JwtAuthGuard from './modules/auth/guard/jwt-auth.guard';
+import { CategoryModule } from './modules/category/category.module';
 
 @Module({
   imports: [
@@ -11,8 +15,10 @@ import { DatabaseModule } from './modules/database/database.module';
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
     UserModule,
+    DocumentModule,
+    CategoryModule,
   ],
   controllers: [AppController],
-  providers: [],
+  // providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
 })
 export class AppModule {}
