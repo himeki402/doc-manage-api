@@ -18,6 +18,10 @@ export class documentResponseDto extends BaseDto {
 
   @Expose()
   @ApiPropertyOptional()
+  fileName?: string;
+
+  @Expose()
+  @ApiPropertyOptional()
   filePath?: string;
 
   //   @ApiPropertyOptional()

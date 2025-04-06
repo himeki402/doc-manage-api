@@ -29,6 +29,12 @@ export class createDocumentDto {
   @IsOptional()
   categoryId?: string;
 
+  @ApiPropertyOptional({ description: 'Name document file' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  fileName?: string;
+
   @ApiPropertyOptional({ description: 'Path to the document file' })
   @IsString()
   @IsOptional()

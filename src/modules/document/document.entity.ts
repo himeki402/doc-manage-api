@@ -15,6 +15,9 @@ export class Document extends BaseEntity {
   content?: string;
 
   @Column({ length: 255, nullable: true })
+  fileName?: string;
+
+  @Column({ length: 255, nullable: true })
   filePath?: string;
 
   @Column({ type: 'text', nullable: true })
