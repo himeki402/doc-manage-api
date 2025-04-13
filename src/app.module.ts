@@ -8,6 +8,9 @@ import { APP_GUARD } from '@nestjs/core';
 import { DocumentModule } from './modules/document/document.module';
 import JwtAuthGuard from './modules/auth/guard/jwt-auth.guard';
 import { CategoryModule } from './modules/category/category.module';
+import { GroupModule } from './modules/group/group.module';
+import { CommentModule } from './modules/comment/comment.module';
+import { TagModule } from './modules/tag/tag.module';
 
 @Module({
   imports: [
@@ -17,6 +20,9 @@ import { CategoryModule } from './modules/category/category.module';
     UserModule,
     DocumentModule,
     CategoryModule,
+    GroupModule,
+    CommentModule,
+    TagModule,
   ],
   controllers: [AppController],
   // providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],

@@ -1,7 +1,10 @@
 import { BaseEntity } from 'src/common/entities/base.entity';
-import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 import { User } from '../user/user.entity';
 import { AccessType } from 'src/common/enum/accessType.enum';
+import { Category } from '../category/category.entity';
+import { Comment } from '../comment/comment.entity';
+import { DocumentTags } from '../tag/document-tags.entity';
 
 @Entity('documents')
 export class Document extends BaseEntity {
@@ -23,16 +26,25 @@ export class Document extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   mimeType?: string;
 
-  @Column({ type: 'uuid', nullable: true, name: 'category_id' })
-  categoryId?: string;
-
   @Column({ type: 'enum', enum: AccessType, default: AccessType.PRIVATE })
   accessType: AccessType;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, any>;
 
+  @ManyToOne(() => Category, (category) => category.documents)
+  @JoinColumn({ name: 'category_id' })
+  category: Category;
+
   @ManyToOne(() => User, (user) => user.documents)
   @JoinColumn({ name: 'created_by' })
   createdBy: User;
+
+  @OneToMany(() => DocumentTags, (documentTag) => documentTag.document)
+  documentTags?: DocumentTags[];
+
+  @OneToMany(() => Comment, (comment) => comment.document, {
+    cascade: true,
+  })
+  comments?: Comment[];
 }
