@@ -2,12 +2,12 @@ import { Module } from '@nestjs/common';
 import { DocumentController } from './document.controller';
 import { DocumentService } from './document.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Document } from './document.entity';
 import { User } from '../user/user.entity';
 import { MulterModule } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { Document } from './entity/document.entity';
 
 @Module({
   imports: [

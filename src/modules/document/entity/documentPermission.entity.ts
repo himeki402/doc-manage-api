@@ -5,7 +5,8 @@ import {
   ManyToOne,
   PrimaryColumn,
 } from 'typeorm';
-import { User } from '../user/user.entity';
+import { User } from '../../user/user.entity';
+import { Document } from './document.entity';
 
 @Entity()
 export class DocumentPermission {

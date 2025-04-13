@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 import { Tag } from './tag.entity';
 import { User } from '../user/user.entity';
-import { Document } from '../document/document.entity';
+import { Document } from '../document/entity/document.entity';
 
 @Entity('document_tags')
 export class DocumentTags {

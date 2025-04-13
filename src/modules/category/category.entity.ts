@@ -1,6 +1,6 @@
 import { BaseEntity } from 'src/common/entities/base.entity';
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
-import { Document } from '../document/document.entity';
+import { Document } from '../document/entity/document.entity';
 
 @Entity('categories')
 export class Category extends BaseEntity {

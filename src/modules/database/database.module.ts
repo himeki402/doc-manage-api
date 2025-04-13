@@ -2,13 +2,15 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { User } from '../user/user.entity';
-import { Document } from '../document/document.entity';
 import { Category } from '../category/category.entity';
 import { Group } from '../group/group.entity';
 import { UserGroup } from '../group/user-group.entity';
 import { Comment } from '../comment/comment.entity';
 import { Tag } from '../tag/tag.entity';
 import { DocumentTags } from '../tag/document-tags.entity';
+import { Document } from '../document/entity/document.entity';
+import { DocumentPermission } from '../document/entity/documentPermission.entity';
+import { DocumentVersion } from '../document/entity/documentVersion.entity';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { DocumentTags } from '../tag/document-tags.entity';
           Comment,
           Tag,
           DocumentTags,
+          DocumentPermission,
+          DocumentVersion,
         ],
         synchronize: true,
       }),

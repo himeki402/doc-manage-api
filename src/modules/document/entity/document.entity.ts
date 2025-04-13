@@ -1,10 +1,13 @@
 import { BaseEntity } from 'src/common/entities/base.entity';
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
-import { User } from '../user/user.entity';
+import { User } from '../../user/user.entity';
 import { AccessType } from 'src/common/enum/accessType.enum';
-import { Category } from '../category/category.entity';
-import { Comment } from '../comment/comment.entity';
-import { DocumentTags } from '../tag/document-tags.entity';
+import { Category } from '../../category/category.entity';
+import { Comment } from '../../comment/comment.entity';
+import { DocumentTags } from '../../tag/document-tags.entity';
+import { DocumentVersion } from './documentVersion.entity';
+import { DocumentPermission } from './documentPermission.entity';
+import { DocumentAuditLog } from './documentAuditLog.entity';
 
 @Entity('documents')
 export class Document extends BaseEntity {
@@ -36,7 +39,7 @@ export class Document extends BaseEntity {
   @JoinColumn({ name: 'category_id' })
   category: Category;
 
-  @ManyToOne(() => User, (user) => user.documents)
+  @ManyToOne(() => User, (user) => user.createdDocuments)
   @JoinColumn({ name: 'created_by' })
   createdBy: User;
 
@@ -47,4 +50,13 @@ export class Document extends BaseEntity {
     cascade: true,
   })
   comments?: Comment[];
+
+  @OneToMany(() => DocumentVersion, (version) => version.document)
+  versions: DocumentVersion[];
+
+  @OneToMany(() => DocumentPermission, (permission) => permission.document)
+  permissions: DocumentPermission[];
+
+  @OneToMany(() => DocumentAuditLog, (log) => log.document)
+  auditLogs: DocumentAuditLog[];
 }

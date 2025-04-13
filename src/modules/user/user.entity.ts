@@ -1,11 +1,14 @@
 import { Exclude } from 'class-transformer';
 import { BaseEntity } from 'src/common/entities/base.entity';
 import { Column, Entity, OneToMany } from 'typeorm';
-import { Document } from '../document/document.entity';
 import { UserGroup } from '../group/user-group.entity';
 import { Group } from '../group/group.entity';
 import { Comment } from '../comment/comment.entity';
 import { DocumentTags } from '../tag/document-tags.entity';
+import { Document } from '../document/entity/document.entity';
+import { DocumentVersion } from '../document/entity/documentVersion.entity';
+import { DocumentAuditLog } from '../document/entity/documentAuditLog.entity';
+import { DocumentPermission } from '../document/entity/documentPermission.entity';
 @Entity('users')
 export class User extends BaseEntity {
   @Column()
@@ -29,11 +32,21 @@ export class User extends BaseEntity {
   @OneToMany(() => Group, (group) => group.createdBy)
   createdGroups?: Group[];
 
-  @OneToMany(() => Document, (documents) => documents.createdBy)
-  documents?: Document[];
+  @OneToMany(() => Document, (document) => document.createdBy)
+  createdDocuments: Document[];
 
   @OneToMany(() => Comment, (comment) => comment.user)
   comments?: Comment[];
+
   @OneToMany(() => DocumentTags, (documentTag) => documentTag.added_by)
   addedTags: DocumentTags[];
+
+  @OneToMany(() => DocumentVersion, (version) => version.modified_by)
+  modifiedVersions: DocumentVersion[];
+
+  @OneToMany(() => DocumentAuditLog, (log) => log.user)
+  auditLogs: DocumentAuditLog[];
+
+  @OneToMany(() => DocumentPermission, (permission) => permission.granted_by)
+  grantedPermissions: DocumentPermission[];
 }
