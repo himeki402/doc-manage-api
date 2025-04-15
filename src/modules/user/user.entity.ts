@@ -4,7 +4,7 @@ import { Column, Entity, OneToMany } from 'typeorm';
 import { UserGroup } from '../group/user-group.entity';
 import { Group } from '../group/group.entity';
 import { Comment } from '../comment/comment.entity';
-import { DocumentTags } from '../tag/document-tags.entity';
+import { DocumentTag } from '../tag/document-tags.entity';
 import { Document } from '../document/entity/document.entity';
 import { DocumentVersion } from '../document/entity/documentVersion.entity';
 import { DocumentAuditLog } from '../document/entity/documentAuditLog.entity';
@@ -38,8 +38,8 @@ export class User extends BaseEntity {
   @OneToMany(() => Comment, (comment) => comment.user)
   comments?: Comment[];
 
-  @OneToMany(() => DocumentTags, (documentTag) => documentTag.added_by)
-  addedTags: DocumentTags[];
+  @OneToMany(() => DocumentTag, (documentTag) => documentTag.added_by)
+  addedTags: DocumentTag[];
 
   @OneToMany(() => DocumentVersion, (version) => version.modified_by)
   modifiedVersions: DocumentVersion[];

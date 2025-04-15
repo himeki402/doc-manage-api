@@ -1,31 +1,36 @@
 import {
   Column,
+  CreateDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
+  PrimaryColumn,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Tag } from './tag.entity';
 import { User } from '../user/user.entity';
 import { Document } from '../document/entity/document.entity';
 
-@Entity('document_tags')
-export class DocumentTags {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+@Entity()
+export class DocumentTag {
+  @PrimaryColumn()
+  document_id: string;
 
-  @ManyToOne(() => Document, (document) => document.documentTags)
+  @PrimaryColumn()
+  tag_id: string;
+
+  @ManyToOne(() => Document)
   @JoinColumn({ name: 'document_id' })
   document: Document;
 
-  @ManyToOne(() => Tag, (tag) => tag.documentTags)
+  @ManyToOne(() => Tag)
   @JoinColumn({ name: 'tag_id' })
   tag: Tag;
 
-  @ManyToOne(() => User, { nullable: true })
+  @ManyToOne(() => User)
   @JoinColumn({ name: 'added_by' })
   added_by: User;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn()
   added_at: Date;
 }

@@ -4,14 +4,14 @@ import { User } from '../../user/user.entity';
 import { AccessType } from 'src/common/enum/accessType.enum';
 import { Category } from '../../category/category.entity';
 import { Comment } from '../../comment/comment.entity';
-import { DocumentTags } from '../../tag/document-tags.entity';
+import { DocumentTag } from '../../tag/document-tags.entity';
 import { DocumentVersion } from './documentVersion.entity';
 import { DocumentPermission } from './documentPermission.entity';
 import { DocumentAuditLog } from './documentAuditLog.entity';
 
 @Entity('documents')
 export class Document extends BaseEntity {
-  @Column({ type: 'text', nullable: false })
+  @Column({ type: 'varchar', length: 255, nullable: false })
   title: string;
 
   @Column({ type: 'text', nullable: true })
@@ -20,8 +20,11 @@ export class Document extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   content?: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   fileName?: string;
+
+  @Column({ type: 'bigint', nullable: true })
+  fileSize?: number;
 
   @Column({ length: 255, nullable: true })
   filePath?: string;
@@ -43,8 +46,8 @@ export class Document extends BaseEntity {
   @JoinColumn({ name: 'created_by' })
   createdBy: User;
 
-  @OneToMany(() => DocumentTags, (documentTag) => documentTag.document)
-  documentTags?: DocumentTags[];
+  @OneToMany(() => DocumentTag, (documentTag) => documentTag.document)
+  documentTags?: DocumentTag[];
 
   @OneToMany(() => Comment, (comment) => comment.document, {
     cascade: true,

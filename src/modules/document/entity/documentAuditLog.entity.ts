@@ -7,6 +7,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { Document } from './document.entity';
 
 @Entity()
 export class DocumentAuditLog {

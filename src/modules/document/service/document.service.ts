@@ -1,11 +1,11 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Document } from './entity/document.entity';
-import { createDocumentDto } from './dto/createDocument.dto';
-import { UpdateDocumentDto } from './dto/updateDocument.dto';
-import { User } from '../user/user.entity';
-import { documentResponseDto } from './dto/documentResponse.dto';
+import { Document } from '../entity/document.entity';
+import { createDocumentDto } from '../dto/createDocument.dto';
+import { UpdateDocumentDto } from '../dto/updateDocument.dto';
+import { User } from '../../user/user.entity';
+import { documentResponseDto } from '../dto/documentResponse.dto';
 import { plainToInstance } from 'class-transformer';
 import { existsSync, unlinkSync } from 'fs';
 
@@ -35,6 +35,7 @@ export class DocumentService {
       description: createDocumentDto.description,
       content: createDocumentDto.content,
       fileName: file.filename,
+      fileSize: file.size,
       filePath: file.path,
       created_at: createDocumentDto.createdAt,
       updated_at: createDocumentDto.updatedAt,

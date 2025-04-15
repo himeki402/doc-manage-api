@@ -8,7 +8,7 @@ import {
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { DocumentService } from './document.service';
+import { DocumentService } from './service/document.service';
 import { createDocumentDto } from './dto/createDocument.dto';
 import JwtAuthGuard from '../auth/guard/jwt-auth.guard';
 import RequestWithUser from '../auth/interface/requestWithUser.interface';

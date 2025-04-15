@@ -1,13 +1,26 @@
-import { BaseEntity } from 'src/common/entities/base.entity';
-import { Column, Entity, JoinColumn, OneToMany } from 'typeorm';
-import { DocumentTags } from './document-tags.entity';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { DocumentTag } from './document-tags.entity';
 
-@Entity('tags')
-export class Tag extends BaseEntity {
-  @Column()
+@Entity()
+export class Tag {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ type: 'varchar', length: 50, unique: true, nullable: false })
   name: string;
-  @Column({ nullable: true })
-  description?: string;
-  @OneToMany(() => DocumentTags, (documentTag) => documentTag.tag)
-  documentTags?: DocumentTags[];
+
+  @Column({ type: 'text', nullable: true })
+  description: string;
+
+  @CreateDateColumn()
+  created_at: Date;
+
+  @OneToMany(() => DocumentTag, (documentTag) => documentTag.tag)
+  documentTags: DocumentTag[];
 }

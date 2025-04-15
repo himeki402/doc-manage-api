@@ -7,10 +7,11 @@ import { Group } from '../group/group.entity';
 import { UserGroup } from '../group/user-group.entity';
 import { Comment } from '../comment/comment.entity';
 import { Tag } from '../tag/tag.entity';
-import { DocumentTags } from '../tag/document-tags.entity';
+import { DocumentTag } from '../tag/document-tags.entity';
 import { Document } from '../document/entity/document.entity';
 import { DocumentPermission } from '../document/entity/documentPermission.entity';
 import { DocumentVersion } from '../document/entity/documentVersion.entity';
+import { DocumentAuditLog } from '../document/entity/documentAuditLog.entity';
 
 @Module({
   imports: [
@@ -32,9 +33,10 @@ import { DocumentVersion } from '../document/entity/documentVersion.entity';
           UserGroup,
           Comment,
           Tag,
-          DocumentTags,
+          DocumentTag,
           DocumentPermission,
           DocumentVersion,
+          DocumentAuditLog,
         ],
         synchronize: true,
       }),

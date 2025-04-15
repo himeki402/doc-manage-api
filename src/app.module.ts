@@ -11,6 +11,9 @@ import { CategoryModule } from './modules/category/category.module';
 import { GroupModule } from './modules/group/group.module';
 import { CommentModule } from './modules/comment/comment.module';
 import { TagModule } from './modules/tag/tag.module';
+import { DashboardService } from './modules/dashboard/dashboard.service';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { HomeModule } from './modules/home/home.module';
 
 @Module({
   imports: [
@@ -23,8 +26,11 @@ import { TagModule } from './modules/tag/tag.module';
     GroupModule,
     CommentModule,
     TagModule,
+    DashboardModule,
+    HomeModule,
   ],
   controllers: [AppController],
+  providers: [DashboardService],
   // providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
 })
 export class AppModule {}
