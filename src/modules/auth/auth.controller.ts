@@ -18,12 +18,16 @@ import { Response } from 'express';
 import RequestWithUser from './interface/requestWithUser.interface';
 import JwtAuthGuard from './guard/jwt-auth.guard';
 import { CreateUserDTO } from '../user/dto/create-user.dto';
-// import { Public } from 'src/decorator/public.decorator';
+import { RolesGuard } from './guard/roles.guard';
+import { SystemRoles } from 'src/decorator/systemRoles.decorator';
+import { SystemRole } from 'src/common/enum/systemRole.enum';
+import { Public } from 'src/decorator/public.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('register')
   async register(
     @Body() createUserData: CreateUserDTO,
@@ -58,6 +62,7 @@ export class AuthController {
     }
   }
   @HttpCode(200)
+  @Public()
   @UseGuards(LocalAuthGuard)
   @Post('login')
   async logIn(@Req() request: RequestWithUser) {
@@ -78,12 +83,5 @@ export class AuthController {
   async logOut(@Res() response: Response) {
     response.setHeader('Set-Cookie', this.authService.getCookieForLogOut());
     response.sendStatus(200);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('authentication')
-  authenticate(@Req() request: RequestWithUser) {
-    const user = request.user;
-    return user;
   }
 }

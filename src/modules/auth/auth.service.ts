@@ -83,7 +83,10 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException();
     }
-    return ResponseData.success(user, 'Login successful');
+    const userResponse = plainToInstance(UserResponseDto, user, {
+      excludeExtraneousValues: true,
+    });
+    return ResponseData.success(userResponse, 'Login successful');
   }
 
   async validateJwtUser(UserId: string) {
@@ -91,7 +94,11 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-    const currentUser = { id: user.id, username: user.username };
+    const currentUser = {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+    };
     return currentUser;
   }
   async assignJwtToCookie(token: string) {

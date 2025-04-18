@@ -1,8 +1,8 @@
 import { Request } from 'express';
-import { User } from '../../user/user.entity';
+import { SystemRole } from 'src/common/enum/systemRole.enum';
 
 interface RequestWithUser extends Request {
-  user: User;
+  user: { id: string; role: SystemRole };
 }
 
 export default RequestWithUser;

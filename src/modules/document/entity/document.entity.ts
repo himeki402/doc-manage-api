@@ -1,13 +1,14 @@
 import { BaseEntity } from 'src/common/entities/base.entity';
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 import { User } from '../../user/user.entity';
-import { AccessType } from 'src/common/enum/accessType.enum';
+import { DocumentType } from 'src/common/enum/documentType.enum';
 import { Category } from '../../category/category.entity';
 import { Comment } from '../../comment/comment.entity';
 import { DocumentTag } from '../../tag/document-tags.entity';
 import { DocumentVersion } from './documentVersion.entity';
 import { DocumentPermission } from './documentPermission.entity';
 import { DocumentAuditLog } from './documentAuditLog.entity';
+import { Group } from 'src/modules/group/group.entity';
 
 @Entity('documents')
 export class Document extends BaseEntity {
@@ -32,8 +33,8 @@ export class Document extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   mimeType?: string;
 
-  @Column({ type: 'enum', enum: AccessType, default: AccessType.PRIVATE })
-  accessType: AccessType;
+  @Column({ type: 'enum', enum: DocumentType, default: DocumentType.PRIVATE })
+  accessType: DocumentType;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, any>;
@@ -48,6 +49,10 @@ export class Document extends BaseEntity {
 
   @OneToMany(() => DocumentTag, (documentTag) => documentTag.document)
   documentTags?: DocumentTag[];
+
+  @ManyToOne(() => Group, (group) => group.documents)
+  @JoinColumn({ name: 'group_id' })
+  group?: Group;
 
   @OneToMany(() => Comment, (comment) => comment.document, {
     cascade: true,

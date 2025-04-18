@@ -8,10 +8,23 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Document } from './entity/document.entity';
+import { Group } from '../group/group.entity';
+import { DocumentAuditLog } from './entity/documentAuditLog.entity';
+import { DocumentPermission } from './entity/documentPermission.entity';
+import { DocumentVersion } from './entity/documentVersion.entity';
+import { GroupMember } from '../group/groupMember';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Document, User]),
+    TypeOrmModule.forFeature([
+      Document,
+      User,
+      Group,
+      GroupMember,
+      DocumentAuditLog,
+      DocumentPermission,
+      DocumentVersion,
+    ]),
     MulterModule.register({
       storage: diskStorage({
         destination: '../uploads',
@@ -40,6 +53,6 @@ import { Document } from './entity/document.entity';
   ],
   controllers: [DocumentController],
   providers: [DocumentService],
-  exports: [DocumentService],
+  exports: [TypeOrmModule],
 })
 export class DocumentModule {}

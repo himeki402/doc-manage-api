@@ -8,26 +8,29 @@ import {
 } from 'typeorm';
 import { Group } from './group.entity';
 import { User } from '../user/user.entity';
+import { GroupRole } from 'src/common/enum/groupRole.enum';
 
-@Entity('user_group')
-export class UserGroup {
+@Entity('group_members')
+export class GroupMember {
   @PrimaryColumn()
   user_id: string;
 
   @PrimaryColumn()
   group_id: string;
 
-  @Column({ default: false })
-  is_admin: boolean;
-
   @CreateDateColumn()
   joined_at?: Date;
 
-  @ManyToOne(() => User, (user) => user.userGroups, { onDelete: 'CASCADE' })
+  @Column({ type: 'enum', enum: GroupRole, nullable: false })
+  role: GroupRole;
+
+  @ManyToOne(() => User, (user) => user.groupMemberships, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'user_id' })
   user?: User;
 
-  @ManyToOne(() => Group, (group) => group.userGroups, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Group, (group) => group.members, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'group_id' })
   group?: Group;
 }

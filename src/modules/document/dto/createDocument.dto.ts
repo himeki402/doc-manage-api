@@ -1,17 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsEnum,
-  IsObject,
-  IsOptional,
-  IsString,
-  MaxLength,
-} from 'class-validator';
-import { AccessType } from 'src/common/enum/accessType.enum';
+import { IsEnum, IsObject, IsOptional, IsString } from 'class-validator';
+import { BaseDto } from 'src/common/dto/base.dto';
+import { DocumentType } from 'src/common/enum/documentType.enum';
 
-export class createDocumentDto {
+export class CreateDocumentDto extends BaseDto {
   @ApiProperty({ description: 'Title of the document', maxLength: 255 })
   @IsString()
-  @MaxLength(255)
   title: string;
 
   @ApiPropertyOptional({ description: 'Description of the document' })
@@ -24,34 +18,17 @@ export class createDocumentDto {
   @IsOptional()
   content?: string;
 
-  @ApiPropertyOptional({ description: 'Category ID of the document' })
-  @IsString()
-  @IsOptional()
-  categoryId?: string;
-
-  @ApiPropertyOptional({ description: 'Name document file' })
-  @IsString()
-  @IsOptional()
-  @MaxLength(255)
-  fileName?: string;
-
-  @ApiPropertyOptional({ description: 'Path to the document file' })
-  @IsString()
-  @IsOptional()
-  @MaxLength(255)
-  filePath?: string;
-
-  @ApiPropertyOptional({ description: 'MIME type of the document file' })
-  @IsString()
-  @IsOptional()
-  @MaxLength(100)
-  mimeType?: string;
-
   @ApiProperty({
-    description: 'Access type of the document',
-    enum: AccessType,
-    default: AccessType.PRIVATE,
+    description: 'Type of the document',
+    enum: DocumentType,
+    default: DocumentType.PRIVATE,
   })
+  @IsEnum(DocumentType)
+  @IsOptional()
+  type?: DocumentType;
+
+  accessType: DocumentType;
+
   @ApiPropertyOptional({
     description: 'Additional metadata for the document',
   })
@@ -59,12 +36,7 @@ export class createDocumentDto {
   @IsOptional()
   metadata?: Record<string, any>;
 
-  @ApiProperty()
-  createdAt: Date;
-
-  @ApiProperty()
-  updatedAt: Date;
-
-  @IsEnum(AccessType)
-  accessType: AccessType = AccessType.PRIVATE;
+  @IsString()
+  @IsOptional()
+  groupId?: string; // Dùng khi type = GROUP
 }

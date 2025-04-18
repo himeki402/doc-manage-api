@@ -10,4 +10,8 @@ export class UserResponseDto extends BaseDto {
   @ApiProperty()
   @Expose()
   name: string;
+
+  @ApiProperty()
+  @Expose()
+  role: string;
 }

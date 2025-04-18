@@ -1,9 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Expose } from 'class-transformer';
 import { BaseDto } from 'src/common/dto/base.dto';
-import { AccessType } from 'src/common/enum/accessType.enum';
+import { DocumentType } from 'src/common/enum/documentType.enum';
 
-export class documentResponseDto extends BaseDto {
+export class DocumentResponseDto extends BaseDto {
   @ApiProperty()
   @Expose()
   title: string;
@@ -15,20 +15,6 @@ export class documentResponseDto extends BaseDto {
   @Expose()
   @ApiPropertyOptional()
   content?: string;
-
-  @Expose()
-  @ApiPropertyOptional()
-  fileName?: string;
-
-  @Expose()
-  @ApiPropertyOptional()
-  filePath?: string;
-
-  //   @ApiPropertyOptional()
-  //   fileSize?: number;
-  @Expose()
-  @ApiPropertyOptional()
-  mimeType?: string;
 
   @Expose()
   @ApiProperty()
@@ -51,8 +37,8 @@ export class documentResponseDto extends BaseDto {
   // @ApiProperty()
   // version: number;
   @Expose()
-  @ApiProperty({ enum: AccessType })
-  accessType: AccessType;
+  @ApiProperty({ enum: DocumentType })
+  accessType: DocumentType;
 
   @Expose()
   @ApiProperty()

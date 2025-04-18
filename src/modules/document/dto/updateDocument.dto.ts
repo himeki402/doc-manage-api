@@ -1,47 +1,24 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsEnum,
-  IsObject,
-  IsOptional,
-  IsString,
-  MaxLength,
-} from 'class-validator';
-import { AccessType } from 'src/common/enum/accessType.enum';
-
+// update-document.dto.ts
+import { IsString, IsEnum, IsOptional } from 'class-validator';
+import { DocumentType } from 'src/common/enum/documentType.enum';
 export class UpdateDocumentDto {
-  @ApiPropertyOptional({ description: 'Title of the document', maxLength: 255 })
   @IsString()
-  @MaxLength(255)
   @IsOptional()
   title?: string;
 
-  @ApiPropertyOptional({ description: 'Description of the document' })
   @IsString()
   @IsOptional()
   description?: string;
 
-  @ApiPropertyOptional({ description: 'Content of the document' })
   @IsString()
   @IsOptional()
   content?: string;
 
-  @ApiPropertyOptional({ description: 'Category ID of the document' })
+  @IsEnum(DocumentType)
+  @IsOptional()
+  type?: DocumentType;
+
   @IsString()
   @IsOptional()
-  categoryId?: string;
-
-  @ApiPropertyOptional({
-    description: 'Access type of the document',
-    enum: AccessType,
-  })
-  @IsEnum(AccessType)
-  @IsOptional()
-  accessType?: AccessType;
-
-  @ApiPropertyOptional({
-    description: 'Additional metadata for the document',
-  })
-  @IsObject()
-  @IsOptional()
-  metadata?: Record<string, any>;
+  group_id?: string;
 }

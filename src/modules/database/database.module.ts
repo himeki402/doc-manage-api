@@ -4,7 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { User } from '../user/user.entity';
 import { Category } from '../category/category.entity';
 import { Group } from '../group/group.entity';
-import { UserGroup } from '../group/user-group.entity';
+import { GroupMember } from '../group/groupMember';
 import { Comment } from '../comment/comment.entity';
 import { Tag } from '../tag/tag.entity';
 import { DocumentTag } from '../tag/document-tags.entity';
@@ -30,7 +30,7 @@ import { DocumentAuditLog } from '../document/entity/documentAuditLog.entity';
           Document,
           Category,
           Group,
-          UserGroup,
+          GroupMember,
           Comment,
           Tag,
           DocumentTag,

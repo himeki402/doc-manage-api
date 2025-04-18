@@ -1,47 +1,24 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  JoinColumn,
-  JoinTable,
-  ManyToMany,
-  ManyToOne,
-  OneToMany,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-} from 'typeorm';
-import { UserGroup } from './user-group.entity';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
+import { GroupMember } from './groupMember';
 import { User } from '../user/user.entity';
+import { BaseEntity } from 'src/common/entities/base.entity';
+import { Document } from '../document/entity/document.entity';
 
 @Entity('groups')
-export class Group {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
-  @Column({ length: 100, nullable: false })
+export class Group extends BaseEntity {
+  @Column({ type: 'varchar', length: 100, nullable: false })
   name: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description?: string;
 
-  @ManyToOne(() => User, (user) => user.createdGroups)
-  @JoinColumn({ name: 'created_by' })
-  createdBy: User;
+  @ManyToOne(() => User, (user) => user.managedGroups)
+  @JoinColumn({ name: 'group_admin_id' })
+  groupAdmin: User;
 
-  @CreateDateColumn()
-  created_at: Date;
+  @OneToMany(() => GroupMember, (groupMember) => groupMember.group)
+  members: GroupMember[];
 
-  @UpdateDateColumn()
-  updated_at: Date;
-
-  @OneToMany(() => UserGroup, (userGroup) => userGroup.group)
-  userGroups: UserGroup[];
-
-  @ManyToMany(() => User)
-  @JoinTable({
-    name: 'user_group',
-    joinColumn: { name: 'group_id', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'user_id', referencedColumnName: 'id' },
-  })
-  users: User[];
+  @OneToMany(() => Document, (document) => document.group)
+  documents: Document[];
 }

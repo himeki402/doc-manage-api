@@ -1,15 +1,28 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param, Post, UseGuards, Query } from '@nestjs/common';
 import { UserService } from './user.service';
-import { User } from './user.entity';
-import { CreateUserDTO } from './dto/create-user.dto';
 import { UserResponseDto } from './dto/response-user.dto';
+import JwtAuthGuard from '../auth/guard/jwt-auth.guard';
+import { RolesGuard } from '../auth/guard/roles.guard';
+import { SystemRoles } from 'src/decorator/systemRoles.decorator';
+import { SystemRole } from 'src/common/enum/systemRole.enum';
+import { GetUsersDto } from './dto/get-users.dto';
+import { ResponseData } from 'src/helpers/response.helper';
 
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
   @Get()
-  getUsers(): Promise<UserResponseDto[]> {
-    return this.userService.findAll();
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN)
+  async getAllUsers(@Query() query: GetUsersDto) {
+    const result = await this.userService.getUsersWithPagination(query);
+    return ResponseData.success(result.data, 'Users retrieved successfully');
+  }
+
+  @Get('/profile/:id')
+  getUserProfile(@Param('id') id: string): Promise<UserResponseDto> {
+    return this.userService.getProfile(id);
   }
   // @Post('/:id')
   // getUser(@Param('id') id: string) {
