@@ -18,12 +18,12 @@ import { CreateDocumentDto } from './dto/createDocument.dto';
 import { UpdateDocumentDto } from './dto/updateDocument.dto';
 import JwtAuthGuard from '../auth/guard/jwt-auth.guard';
 import RequestWithUser from '../auth/interface/requestWithUser.interface';
-import { DocumentResponseDto } from './dto/documentResponse.dto';
 import { ResponseData } from 'src/helpers/response.helper';
 import { RolesGuard } from '../auth/guard/roles.guard';
 import { SystemRoles } from 'src/decorator/systemRoles.decorator';
 import { SystemRole } from 'src/common/enum/systemRole.enum';
 import { GetDocumentsDto } from './dto/get-documents.dto';
+import { Public } from 'src/decorator/public.decorator';
 
 @Controller('documents')
 export class DocumentController {
@@ -46,20 +46,41 @@ export class DocumentController {
     return ResponseData.success(data, 'Document uploaded successfully');
   }
 
+  @Public()
+  @Get('public')
+  async getPublicDocuments(@Query() query: GetDocumentsDto) {
+    const result = await this.documentService.getDocumentsPublic(query);
+    return ResponseData.success(
+      result.data,
+      'Public documents retrieved successfully',
+    );
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @SystemRoles(SystemRole.ADMIN, SystemRole.USER, SystemRole.GUEST)
-  @Get()
-  async getDocuments(
+  @SystemRoles(SystemRole.ADMIN)
+  @Get('admin')
+  async getAllDocuments(@Query() query: GetDocumentsDto) {
+    const result = await this.documentService.getAllDocuments(query);
+    return ResponseData.success(
+      result.data,
+      'All documents retrieved successfully',
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @Get('my-documents')
+  async getMyDocuments(
     @Query() query: GetDocumentsDto,
     @Req() request: RequestWithUser,
   ) {
-    const result = await this.documentService.getDocuments(
+    const result = await this.documentService.getMyDocuments(
       query,
       request.user.id,
     );
     return ResponseData.success(
       result.data,
-      'Documents retrieved successfully',
+      'User documents retrieved successfully',
     );
   }
 

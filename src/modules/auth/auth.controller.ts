@@ -72,6 +72,7 @@ export class AuthController {
       if (request.res) {
         request.res.setHeader('Set-Cookie', cookie);
       }
+      console.log('User logged in:', user.role);
       return ResponseData.success(user, 'User logged in successfully');
     } catch (error) {
       return ResponseData.error(error.message, error.statusCode);

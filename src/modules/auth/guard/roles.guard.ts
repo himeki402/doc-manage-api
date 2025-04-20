@@ -1,18 +1,18 @@
-// roles.guard.ts
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Document } from 'src/modules/document/entity/document.entity';
+import { DocumentPermission } from 'src/modules/document/entity/documentPermission.entity';
+import { GroupMember } from 'src/modules/group/groupMember';
 import { DocumentType } from 'src/common/enum/documentType.enum';
 import { EntityType } from 'src/common/enum/entityType.enum';
 import { GroupRole } from 'src/common/enum/groupRole.enum';
 import { PermissionType } from 'src/common/enum/permissionType.enum';
 import { SystemRole } from 'src/common/enum/systemRole.enum';
-import { GROUP_ROLES_KEY } from 'src/decorator/groupRoles.decorator';
 import { SYSTEM_ROLES_KEY } from 'src/decorator/systemRoles.decorator';
-import { Document } from 'src/modules/document/entity/document.entity';
-import { DocumentPermission } from 'src/modules/document/entity/documentPermission.entity';
-import { GroupMember } from 'src/modules/group/groupMember';
-import { Repository } from 'typeorm';
+import { GROUP_ROLES_KEY } from 'src/decorator/groupRoles.decorator';
+import { ALLOW_LIST_ACCESS_KEY } from 'src/decorator/allowListAccess.decorator';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -27,6 +27,7 @@ export class RolesGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Lấy metadata từ decorator
     const requiredSystemRoles = this.reflector.getAllAndOverride<SystemRole[]>(
       SYSTEM_ROLES_KEY,
       [context.getHandler(), context.getClass()],
@@ -35,16 +36,21 @@ export class RolesGuard implements CanActivate {
       GROUP_ROLES_KEY,
       [context.getHandler(), context.getClass()],
     );
-
+    const allowListAccess = this.reflector.getAllAndOverride<boolean>(
+      ALLOW_LIST_ACCESS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
     const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
       context.getHandler(),
       context.getClass(),
     ]);
 
+    // Nếu API công khai, cho phép truy cập
     if (isPublic) {
       return true;
     }
 
+    // Nếu không yêu cầu vai trò, cho phép truy cập
     if (!requiredSystemRoles && !requiredGroupRoles) {
       return true;
     }
@@ -52,38 +58,43 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
+    // Kiểm tra user tồn tại
     if (!user || !user.role) {
       return false;
     }
 
-    const documentId = request.params.id || request.body.document_id;
+    // Lấy documentId từ request
+    const documentId =
+      request.params?.id ||
+      (request.body && 'document_id' in request.body
+        ? request.body.document_id
+        : null);
 
     // Kiểm tra SystemRole
     if (requiredSystemRoles) {
-      if (user.role.includes(SystemRole.ADMIN)) {
+      // ADMIN có toàn quyền
+      if (user.role === SystemRole.ADMIN) {
         return true;
       }
 
-      const hasSystemRole = user.role.some((role) =>
-        requiredSystemRoles.includes(role),
-      );
+      // Kiểm tra vai trò hệ thống
+      const hasSystemRole = requiredSystemRoles.includes(user.role);
       if (!hasSystemRole) {
         return false;
       }
 
-      if (user.role.includes(SystemRole.GUEST)) {
+      // Xử lý GUEST
+      if (user.role === SystemRole.GUEST) {
+        if (allowListAccess || (request.method === 'GET' && !documentId)) {
+          return true; // GUEST có thể xem danh sách public
+        }
         if (!documentId) {
           return false;
         }
-
         const document = await this.documentRepository.findOne({
           where: { id: documentId },
         });
-        if (!document) {
-          return false;
-        }
-
-        return document.accessType === DocumentType.PUBLIC;
+        return document?.accessType === DocumentType.PUBLIC || false;
       }
     }
 
@@ -91,50 +102,45 @@ export class RolesGuard implements CanActivate {
     if (requiredGroupRoles && documentId) {
       const document = await this.documentRepository.findOne({
         where: { id: documentId },
-        relations: ['group', 'group.groupAdmin'], // Tải quan hệ group và groupAdmin
+        relations: ['group', 'group.groupAdmin'],
       });
       if (!document) {
         return false;
       }
 
       if (document.accessType === DocumentType.GROUP && document.group) {
-        // Kiểm tra xem user có phải Group Admin của nhóm không
+        // GROUP_ADMIN có toàn quyền
         if (
           document.group.groupAdmin &&
           document.group.groupAdmin.id === user.id
         ) {
-          return true; // Group Admin có toàn quyền
+          return true;
         }
 
-        // Kiểm tra vai trò của user trong nhóm
+        // Kiểm tra vai trò trong nhóm
         const groupMember = await this.groupMemberRepository.findOne({
-          where: {
-            group_id: document.group.id,
-            user_id: user.id,
-          },
+          where: { group_id: document.group.id, user_id: user.id },
         });
-
         if (!groupMember) {
-          return false; // Không phải thành viên nhóm
+          return false;
         }
 
-        const groupRole = groupMember.role;
-        const hasGroupRole = requiredGroupRoles.includes(groupRole);
+        const hasGroupRole = requiredGroupRoles.includes(groupMember.role);
         if (!hasGroupRole) {
           return false;
         }
 
-        // Kiểm tra quyền cụ thể dựa trên GroupRole
+        // Kiểm tra quyền cụ thể
+        const method = request.method.toUpperCase();
         if (requiredGroupRoles.includes(GroupRole.ADMIN)) {
-          return true; // GroupRole.ADMIN có quyền WRITE
+          return true; // GROUP_ADMIN có quyền READ/WRITE
         } else if (requiredGroupRoles.includes(GroupRole.MEMBER)) {
-          const method = request.method.toUpperCase();
-          return method === 'GET'; // GroupRole.MEMBER chỉ có quyền READ
+          return method === 'GET'; // GROUP_MEMBER chỉ có quyền READ
         }
       }
     }
 
-    // Kiểm tra quyền chi tiết qua document_permissions
+    // Kiểm tra quyền trên tài liệu PRIVATE
     if (documentId) {
       const document = await this.documentRepository.findOne({
         where: { id: documentId },
@@ -145,6 +151,12 @@ export class RolesGuard implements CanActivate {
       }
 
       if (document.accessType === DocumentType.PRIVATE) {
+        // Người tạo có toàn quyền
+        if (document.createdBy.id === user.id) {
+          return true;
+        }
+
+        // Kiểm tra quyền chia sẻ
         const permission = await this.documentPermissionRepository.findOne({
           where: {
             document_id: documentId,
@@ -153,22 +165,18 @@ export class RolesGuard implements CanActivate {
           },
         });
 
-        if (!permission && document.createdBy.id !== user.id) {
-          return false; // Không có quyền và không phải người tạo
+        if (!permission) {
+          return false;
         }
 
         const method = request.method.toUpperCase();
         if (method === 'GET') {
           return (
-            document.createdBy.id === user.id ||
-            permission?.permission_type === PermissionType.READ ||
-            permission?.permission_type === PermissionType.WRITE
+            permission.permission_type === PermissionType.READ ||
+            permission.permission_type === PermissionType.WRITE
           );
         } else if (['POST', 'PUT', 'DELETE'].includes(method)) {
-          return (
-            document.createdBy.id === user.id ||
-            permission?.permission_type === PermissionType.WRITE
-          );
+          return permission.permission_type === PermissionType.WRITE;
         }
       }
     }

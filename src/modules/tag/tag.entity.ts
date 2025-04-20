@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 import { DocumentTag } from './document-tags.entity';
 
-@Entity()
+@Entity('tags')
 export class Tag {
   @PrimaryGeneratedColumn('uuid')
   id: string;

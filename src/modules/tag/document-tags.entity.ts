@@ -11,7 +11,7 @@ import { Tag } from './tag.entity';
 import { User } from '../user/user.entity';
 import { Document } from '../document/entity/document.entity';
 
-@Entity()
+@Entity('document_tags')
 export class DocumentTag {
   @PrimaryColumn()
   document_id: string;

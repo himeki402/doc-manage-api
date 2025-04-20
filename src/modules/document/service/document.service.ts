@@ -14,7 +14,6 @@ import { UpdateDocumentDto } from '../dto/updateDocument.dto';
 import { User } from '../../user/user.entity';
 import { DocumentResponseDto } from '../dto/documentResponse.dto';
 import { plainToInstance } from 'class-transformer';
-import { existsSync, unlinkSync } from 'fs';
 import { GetDocumentsDto } from '../dto/get-documents.dto';
 import { DocumentType } from 'src/common/enum/documentType.enum';
 import { DocumentPermission } from '../entity/documentPermission.entity';
@@ -23,6 +22,7 @@ import { Group } from 'src/modules/group/group.entity';
 import { GroupMember } from 'src/modules/group/groupMember';
 import { EntityType } from 'src/common/enum/entityType.enum';
 import { PermissionType } from 'src/common/enum/permissionType.enum';
+import { AwsS3Service } from './aws-s3.service';
 
 @Injectable()
 export class DocumentService {
@@ -37,6 +37,7 @@ export class DocumentService {
     private readonly groupRepository: Repository<Group>,
     @InjectRepository(GroupMember)
     private readonly groupMemberRepository: Repository<GroupMember>,
+    private readonly awsS3Service: AwsS3Service,
   ) {}
 
   async createDocument(
@@ -44,18 +45,20 @@ export class DocumentService {
     createDocumentDto: CreateDocumentDto,
     userId: string,
   ): Promise<DocumentResponseDto> {
-    // Chuyển đổi DTO và validate
+    // Validate DTO
     const dtoInstance = plainToInstance(CreateDocumentDto, createDocumentDto);
     const errors = await validate(dtoInstance);
     if (errors.length > 0) {
       throw new BadRequestException('Validation failed: ' + errors.toString());
     }
 
-    // Xử lý file upload
-    const filePath = file ? `/uploads/${file.filename}` : null;
-    const mimeType = file ? file.mimetype : null;
+    // Upload file to AWS S3 if exists
+    let fileInfo: { key: string; url: string } | null = null;
+    if (file) {
+      fileInfo = await this.awsS3Service.uploadFile(file);
+    }
 
-    // Nếu tài liệu thuộc nhóm, kiểm tra group_id
+    // Check group if document belongs to a group
     let group: Group | null = null;
     if (dtoInstance.type === DocumentType.GROUP && dtoInstance.groupId) {
       group = await this.groupRepository.findOne({
@@ -66,7 +69,7 @@ export class DocumentService {
         throw new NotFoundException('Group not found');
       }
 
-      // Kiểm tra xem user có phải thành viên nhóm không
+      // Check if user is a group member
       const groupMember = await this.groupMemberRepository.findOne({
         where: { group_id: dtoInstance.groupId, user_id: userId },
       });
@@ -75,23 +78,25 @@ export class DocumentService {
       }
     }
 
-    // Tạo document
+    // Create document
     const document = this.documentRepository.create({
       title: dtoInstance.title,
       description: dtoInstance.description,
-      fileName: file?.filename,
+      content: dtoInstance.content,
+      fileName: file?.originalname,
       fileSize: file?.size,
-      filePath: filePath,
-      mimeType: mimeType,
+      filePath: fileInfo?.key,
+      fileUrl: fileInfo?.url,
+      mimeType: file?.mimetype,
       accessType: dtoInstance.type || DocumentType.PRIVATE,
       createdBy: { id: userId } as User,
       group: group || undefined,
       metadata: dtoInstance.metadata,
-    } as Document);
+    } as Partial<Document>);
 
     const savedDocument = await this.documentRepository.save(document);
 
-    // Tự động cấp quyền WRITE cho người tạo
+    // Grant WRITE permission to creator
     const permission = this.documentPermissionRepository.create({
       document_id: savedDocument.id,
       entity_type: EntityType.USER,
@@ -102,7 +107,7 @@ export class DocumentService {
     } as DocumentPermission);
     await this.documentPermissionRepository.save(permission);
 
-    // Load the complete document with relations for response
+    // Load complete document with relations
     const completeDocument = await this.documentRepository.findOne({
       where: { id: savedDocument.id },
       relations: ['createdBy', 'group'],
@@ -112,7 +117,6 @@ export class DocumentService {
       throw new NotFoundException('Created document not found');
     }
 
-    // Map to response DTO with required fields
     return plainToInstance(
       DocumentResponseDto,
       {
@@ -127,43 +131,30 @@ export class DocumentService {
     );
   }
 
-  async getDocuments(query: GetDocumentsDto, userId: string) {
-    const {
-      page = 1,
-      limit = 10,
-      search,
-      sortBy = 'createdAt',
-      sortOrder = 'DESC',
-      accessType,
-      groupId,
-    } = query;
+  async getDocumentsPublic(query) {
+    const { page = 1, limit = 10, search } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.documentRepository
       .createQueryBuilder('document')
-      .leftJoinAndSelect('document.createdBy', 'createdBy')
-      .leftJoinAndSelect('document.group', 'group')
-      .where('document.createdBy.id = :userId', { userId });
+      .select([
+        'document.id',
+        'document.title',
+        'document.description',
+        'document.accessType',
+        'document.created_at',
+      ])
+      .where('document.accessType = :accessType', {
+        accessType: DocumentType.PUBLIC,
+      });
 
     if (search) {
-      queryBuilder.andWhere(
-        '(document.title LIKE :search OR document.description LIKE :search)',
-        { search: `%${search}%` },
-      );
-    }
-
-    if (accessType) {
-      queryBuilder.andWhere('document.accessType = :accessType', {
-        accessType,
+      queryBuilder.andWhere('document.title LIKE :search', {
+        search: `%${search}%`,
       });
     }
 
-    if (groupId) {
-      queryBuilder.andWhere('document.group.id = :groupId', { groupId });
-    }
-
     const [documents, total] = await queryBuilder
-      .orderBy(`document.${sortBy}`, sortOrder)
       .skip(skip)
       .take(limit)
       .getManyAndCount();
@@ -246,12 +237,12 @@ export class DocumentService {
       throw new HttpException('Document not found', HttpStatus.NOT_FOUND);
     }
 
-    // Delete the physical file
-    if (document.filePath && existsSync(document.filePath)) {
-      unlinkSync(document.filePath);
+    // Delete file from S3 if exists
+    if (document.filePath) {
+      await this.awsS3Service.deleteFile(document.filePath);
     }
 
-    // Delete the database record
+    // Delete database record
     await this.documentRepository.remove(document);
   }
 
@@ -264,5 +255,92 @@ export class DocumentService {
     return plainToInstance(DocumentResponseDto, dataForResponse, {
       excludeExtraneousValues: true,
     });
+  }
+
+  async getAllDocuments(query: GetDocumentsDto) {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC',
+    } = query;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.documentRepository
+      .createQueryBuilder('document')
+      .leftJoinAndSelect('document.createdBy', 'createdBy')
+      .leftJoinAndSelect('document.group', 'group');
+
+    if (search) {
+      queryBuilder.andWhere(
+        '(document.title LIKE :search OR document.description LIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    // Apply sorting
+    queryBuilder.orderBy(`document.${sortBy}`, sortOrder);
+
+    // Get total count
+    const total = await queryBuilder.getCount();
+
+    // Apply pagination
+    queryBuilder.skip(skip).take(limit);
+
+    // Execute query
+    const documents = await queryBuilder.getMany();
+
+    // Map to response DTO
+    const data = documents.map((doc) => this.mapToResponseDto(doc));
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getMyDocuments(query: GetDocumentsDto, userId: string) {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.documentRepository
+      .createQueryBuilder('document')
+      .select([
+        'document.id',
+        'document.title',
+        'document.description',
+        'document.accessType',
+        'document.created_at',
+      ])
+      .where('document.created_by = :userId', { userId });
+
+    if (search) {
+      queryBuilder.andWhere('document.title LIKE :search', {
+        search: `%${search}%`,
+      });
+    }
+
+    const [documents, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    const data = documents.map((doc) => this.mapToResponseDto(doc));
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }

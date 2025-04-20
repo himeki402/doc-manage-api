@@ -4,15 +4,13 @@ import { DocumentService } from './service/document.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../user/user.entity';
 import { MulterModule } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import { Document } from './entity/document.entity';
 import { Group } from '../group/group.entity';
 import { DocumentAuditLog } from './entity/documentAuditLog.entity';
 import { DocumentPermission } from './entity/documentPermission.entity';
 import { DocumentVersion } from './entity/documentVersion.entity';
 import { GroupMember } from '../group/groupMember';
+import { AwsS3Service } from './service/aws-s3.service';
 
 @Module({
   imports: [
@@ -26,14 +24,9 @@ import { GroupMember } from '../group/groupMember';
       DocumentVersion,
     ]),
     MulterModule.register({
-      storage: diskStorage({
-        destination: '../uploads',
-        filename: (req, file, cb) => {
-          const uniqueSuffix = uuidv4();
-          const ext = extname(file.originalname);
-          cb(null, `${uniqueSuffix}${ext}`);
-        },
-      }),
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB
+      },
       fileFilter: (req, file, cb) => {
         const allowedMimeTypes = [
           'application/pdf',
@@ -46,13 +39,10 @@ import { GroupMember } from '../group/groupMember';
           cb(new Error('Chỉ chấp nhận file PDF và Word (.docx)'), false);
         }
       },
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB
-      },
     }),
   ],
   controllers: [DocumentController],
-  providers: [DocumentService],
+  providers: [DocumentService, AwsS3Service],
   exports: [TypeOrmModule],
 })
 export class DocumentModule {}
