@@ -258,40 +258,30 @@ export class DocumentService {
   }
 
   async getAllDocuments(query: GetDocumentsDto) {
-    const {
-      page = 1,
-      limit = 10,
-      search,
-      sortBy = 'createdAt',
-      sortOrder = 'DESC',
-    } = query;
+    const { page = 1, limit = 10, search } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.documentRepository
       .createQueryBuilder('document')
-      .leftJoinAndSelect('document.createdBy', 'createdBy')
-      .leftJoinAndSelect('document.group', 'group');
+      .select([
+        'document.id',
+        'document.title',
+        'document.description',
+        'document.accessType',
+        'document.created_at',
+      ]);
 
     if (search) {
-      queryBuilder.andWhere(
-        '(document.title LIKE :search OR document.description LIKE :search)',
-        { search: `%${search}%` },
-      );
+      queryBuilder.andWhere('document.title LIKE :search', {
+        search: `%${search}%`,
+      });
     }
 
-    // Apply sorting
-    queryBuilder.orderBy(`document.${sortBy}`, sortOrder);
+    const [documents, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
 
-    // Get total count
-    const total = await queryBuilder.getCount();
-
-    // Apply pagination
-    queryBuilder.skip(skip).take(limit);
-
-    // Execute query
-    const documents = await queryBuilder.getMany();
-
-    // Map to response DTO
     const data = documents.map((doc) => this.mapToResponseDto(doc));
 
     return {

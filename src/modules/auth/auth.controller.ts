@@ -18,14 +18,16 @@ import { Response } from 'express';
 import RequestWithUser from './interface/requestWithUser.interface';
 import JwtAuthGuard from './guard/jwt-auth.guard';
 import { CreateUserDTO } from '../user/dto/create-user.dto';
-import { RolesGuard } from './guard/roles.guard';
-import { SystemRoles } from 'src/decorator/systemRoles.decorator';
 import { SystemRole } from 'src/common/enum/systemRole.enum';
 import { Public } from 'src/decorator/public.decorator';
+import { UserService } from '../user/user.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly userService: UserService,
+  ) {}
 
   @Public()
   @Post('register')
@@ -84,5 +86,20 @@ export class AuthController {
   async logOut(@Res() response: Response) {
     response.setHeader('Set-Cookie', this.authService.getCookieForLogOut());
     response.sendStatus(200);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async getMe(@Req() request: RequestWithUser) {
+    try {
+      console.log('User details:', request.user.id);
+      const userResponse = await this.userService.getProfile(request.user.id);
+      return ResponseData.success(userResponse, 'User authenticated');
+    } catch (error) {
+      return ResponseData.error(
+        'Failed to fetch user',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
   }
 }

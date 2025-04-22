@@ -107,14 +107,13 @@ export class UserService {
     });
   }
 
-  getProfile(id: string): Promise<UserResponseDto> {
-    return this.userRepository.findOne({ where: { id } }).then((user) => {
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
-      return plainToInstance(UserResponseDto, user, {
-        excludeExtraneousValues: true,
-      });
+  async getProfile(id: string): Promise<UserResponseDto> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return plainToInstance(UserResponseDto, user, {
+      excludeExtraneousValues: true,
     });
   }
 
