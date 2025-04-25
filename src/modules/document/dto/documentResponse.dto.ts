@@ -43,4 +43,8 @@ export class DocumentResponseDto extends BaseDto {
   @Expose()
   @ApiProperty()
   metadata: Record<string, any>;
+
+  @Expose()
+  @ApiProperty()
+  created_at: Date;
 }

@@ -16,7 +16,7 @@ export class GetDocumentsDto {
   @IsNumber()
   @Min(1)
   @IsOptional()
-  limit?: number = 10;
+  limit?: number;
 
   @ApiProperty({ required: false })
   @IsString()
@@ -42,4 +42,9 @@ export class GetDocumentsDto {
   @IsString()
   @IsOptional()
   groupId?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
 }

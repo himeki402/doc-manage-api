@@ -11,6 +11,7 @@ import { DocumentPermission } from './entity/documentPermission.entity';
 import { DocumentVersion } from './entity/documentVersion.entity';
 import { GroupMember } from '../group/groupMember';
 import { AwsS3Service } from './service/aws-s3.service';
+import { Category } from '../category/category.entity';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AwsS3Service } from './service/aws-s3.service';
       DocumentAuditLog,
       DocumentPermission,
       DocumentVersion,
+      Category,
     ]),
     MulterModule.register({
       limits: {

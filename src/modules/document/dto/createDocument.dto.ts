@@ -38,5 +38,9 @@ export class CreateDocumentDto extends BaseDto {
 
   @IsString()
   @IsOptional()
-  groupId?: string; // Dùng khi type = GROUP
+  categoryId?: string; 
+
+  @IsString()
+  @IsOptional()
+  groupId?: string; 
 }

@@ -51,7 +51,7 @@ export class DocumentController {
   async getPublicDocuments(@Query() query: GetDocumentsDto) {
     const result = await this.documentService.getDocumentsPublic(query);
     return ResponseData.success(
-      result.data,
+      result,
       'Public documents retrieved successfully',
     );
   }
@@ -61,10 +61,7 @@ export class DocumentController {
   @Get('admin')
   async getAllDocuments(@Query() query: GetDocumentsDto) {
     const result = await this.documentService.getAllDocuments(query);
-    return ResponseData.success(
-      result.data,
-      'All documents retrieved successfully',
-    );
+    return ResponseData.success(result, 'All documents retrieved successfully');
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -79,8 +76,18 @@ export class DocumentController {
       request.user.id,
     );
     return ResponseData.success(
-      result.data,
+      result,
       'User documents retrieved successfully',
+    );
+  }
+
+  @Public()
+  @Get('by-categoryId')
+  async getDocumentsByCategory(@Query() query: GetDocumentsDto) {
+    const result = await this.documentService.getDocumentsByCategory(query);
+    return ResponseData.success(
+      result,
+      'Documents by category retrieved successfully',
     );
   }
 

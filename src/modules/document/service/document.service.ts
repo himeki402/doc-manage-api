@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Document } from '../entity/document.entity';
 import { CreateDocumentDto } from '../dto/createDocument.dto';
 import { UpdateDocumentDto } from '../dto/updateDocument.dto';
@@ -23,6 +23,7 @@ import { GroupMember } from 'src/modules/group/groupMember';
 import { EntityType } from 'src/common/enum/entityType.enum';
 import { PermissionType } from 'src/common/enum/permissionType.enum';
 import { AwsS3Service } from './aws-s3.service';
+import { Category } from 'src/modules/category/category.entity';
 
 @Injectable()
 export class DocumentService {
@@ -38,6 +39,8 @@ export class DocumentService {
     @InjectRepository(GroupMember)
     private readonly groupMemberRepository: Repository<GroupMember>,
     private readonly awsS3Service: AwsS3Service,
+    @InjectRepository(Category)
+    private readonly categoryRepository: Repository<Category>,
   ) {}
 
   async createDocument(
@@ -90,6 +93,7 @@ export class DocumentService {
       mimeType: file?.mimetype,
       accessType: dtoInstance.type || DocumentType.PRIVATE,
       createdBy: { id: userId } as User,
+      category: dtoInstance.categoryId,
       group: group || undefined,
       metadata: dtoInstance.metadata,
     } as Partial<Document>);
@@ -246,11 +250,14 @@ export class DocumentService {
     await this.documentRepository.remove(document);
   }
 
-  private mapToResponseDto(document: Document): DocumentResponseDto {
+  private mapToResponseDto(document: Document): any {
     const dataForResponse = {
       ...document,
       createdByName: document.createdBy?.name,
       groupName: document.group?.name,
+      category: document.category
+        ? { id: document.category.id, name: document.category.name }
+        : null,
     };
     return plainToInstance(DocumentResponseDto, dataForResponse, {
       excludeExtraneousValues: true,
@@ -276,6 +283,59 @@ export class DocumentService {
         search: `%${search}%`,
       });
     }
+
+    const [documents, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    const data = documents.map((doc) => this.mapToResponseDto(doc));
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Lấy document theo category_id
+   * @param query - lấy thông tin query
+   * @returns Danh sách Document
+   */
+  async getDocumentsByCategory(query: GetDocumentsDto) {
+    const { page = 1, limit = 10, categoryId } = query;
+    const skip = (page - 1) * limit;
+
+    // Kiểm tra xem category có tồn tại không
+    const categoryExists = await this.categoryRepository.findOne({
+      where: { id: categoryId },
+    });
+    if (!categoryExists) {
+      throw new NotFoundException(`Category with ID '${categoryId}' not found`);
+    }
+
+    const queryBuilder = this.documentRepository
+      .createQueryBuilder('document')
+      .leftJoinAndSelect('document.category', 'category')
+      .leftJoinAndSelect('document.createdBy', 'createdBy')
+      .select([
+        'document.id',
+        'document.title',
+        'document.description',
+        'document.accessType',
+        'document.created_at',
+        'document.category_id',
+        'category.id',
+        'category.name',
+        'createdBy.id',
+        'createdBy.name',
+      ])
+      .where('category.id = :categoryId', { categoryId });
 
     const [documents, total] = await queryBuilder
       .skip(skip)
