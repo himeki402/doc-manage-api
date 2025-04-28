@@ -28,11 +28,15 @@ export class DocumentPermission {
   })
   permission_type: PermissionType;
 
-  @ManyToOne(() => Document)
+  @ManyToOne(() => Document, (document) => document.permissions, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'document_id' })
   document: Document;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, (user) => user.grantedPermissions, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'granted_by' })
   granted_by: User;
 

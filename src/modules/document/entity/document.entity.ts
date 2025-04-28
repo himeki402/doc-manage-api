@@ -1,5 +1,13 @@
 import { BaseEntity } from 'src/common/entities/base.entity';
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
+import {
+  BeforeInsert,
+  BeforeUpdate,
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+} from 'typeorm';
 import { User } from '../../user/user.entity';
 import { DocumentType } from 'src/common/enum/documentType.enum';
 import { Category } from '../../category/category.entity';
@@ -9,6 +17,7 @@ import { DocumentVersion } from './documentVersion.entity';
 import { DocumentPermission } from './documentPermission.entity';
 import { DocumentAuditLog } from './documentAuditLog.entity';
 import { Group } from 'src/modules/group/group.entity';
+import slugify from 'slugify';
 
 @Entity('documents')
 export class Document extends BaseEntity {
@@ -29,6 +38,12 @@ export class Document extends BaseEntity {
 
   @Column({ length: 255, nullable: true })
   filePath?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  fileUrl?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  slug?: string;
 
   @Column({ type: 'text', nullable: true })
   mimeType?: string;
@@ -62,9 +77,20 @@ export class Document extends BaseEntity {
   @OneToMany(() => DocumentVersion, (version) => version.document)
   versions: DocumentVersion[];
 
-  @OneToMany(() => DocumentPermission, (permission) => permission.document)
+  @OneToMany(() => DocumentPermission, (permission) => permission.document, {
+    cascade: true,
+    onDelete: 'CASCADE',
+  })
   permissions: DocumentPermission[];
 
   @OneToMany(() => DocumentAuditLog, (log) => log.document)
   auditLogs: DocumentAuditLog[];
+
+  @BeforeInsert()
+  @BeforeUpdate()
+  generateSlug() {
+    if (!this.slug && this.title) {
+      this.slug = slugify(this.title);
+    }
+  }
 }

@@ -23,3 +23,16 @@ export class UpdateCategoryDto {
   description?: string;
   parent_id?: string;
 }
+
+export class CategoryResponseDto {
+  id: string;
+  name: string;
+  description?: string;
+  parent_id?: string;
+  slug: string;
+  parent?: CategoryResponseDto;
+  children?: CategoryResponseDto[];
+  documentCount: number;
+  created_at: Date;
+  updated_at: Date;
+}

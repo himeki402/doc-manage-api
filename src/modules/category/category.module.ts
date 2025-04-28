@@ -8,7 +8,14 @@ import { GroupMember } from '../group/groupMember';
 import { DocumentPermission } from '../document/entity/documentPermission.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Category, Document, GroupMember, DocumentPermission])],
+  imports: [
+    TypeOrmModule.forFeature([
+      Category,
+      Document,
+      GroupMember,
+      DocumentPermission,
+    ]),
+  ],
   controllers: [CategoryController],
   providers: [CategoryService],
   exports: [CategoryService],

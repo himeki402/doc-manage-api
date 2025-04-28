@@ -10,6 +10,7 @@ import { DocumentVersion } from '../document/entity/documentVersion.entity';
 import { DocumentAuditLog } from '../document/entity/documentAuditLog.entity';
 import { DocumentPermission } from '../document/entity/documentPermission.entity';
 import { SystemRole } from 'src/common/enum/systemRole.enum';
+import { UserStatus } from 'src/common/enum/permissionType.enum';
 @Entity('users')
 export class User extends BaseEntity {
   @Column()
@@ -32,8 +33,30 @@ export class User extends BaseEntity {
   })
   role: SystemRole;
 
-  @Column({ default: false })
-  is_active?: boolean;
+  @Column({
+    type: 'enum',
+    enum: UserStatus,
+    default: UserStatus.PENDING,
+  })
+  status: UserStatus;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  registrationDate: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastLogin: Date | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  avatar?: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  phone?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  address?: string;
+
+  @Column({ type: 'text', nullable: true })
+  bio?: string;
 
   @OneToMany(() => Group, (group) => group.groupAdmin)
   managedGroups: Group[];

@@ -24,9 +24,6 @@ export class CreateDocumentDto extends BaseDto {
     default: DocumentType.PRIVATE,
   })
   @IsEnum(DocumentType)
-  @IsOptional()
-  type?: DocumentType;
-
   accessType: DocumentType;
 
   @ApiPropertyOptional({
@@ -38,9 +35,9 @@ export class CreateDocumentDto extends BaseDto {
 
   @IsString()
   @IsOptional()
-  categoryId?: string; 
+  categoryId?: string;
 
   @IsString()
   @IsOptional()
-  groupId?: string; 
+  groupId?: string;
 }

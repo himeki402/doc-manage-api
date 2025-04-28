@@ -15,9 +15,9 @@ export class UserController {
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN)
-  async getAllUsers(@Query() query: GetUsersDto) {
-    const result = await this.userService.getUsersWithPagination(query);
-    return ResponseData.success(result.data, 'Users retrieved successfully');
+  async getAllUsers() {
+    const result = await this.userService.findAll();
+    return ResponseData.success(result, 'Users retrieved successfully');
   }
 
   @Get('/profile/:id')

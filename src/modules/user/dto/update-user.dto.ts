@@ -1,38 +1,49 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsEmail, MinLength } from 'class-validator';
-import { BaseDto } from 'src/common/dto/base.dto';
+import { IsEmail, IsEnum, IsOptional, IsString, Length } from 'class-validator';
+import { UserStatus } from 'src/common/enum/permissionType.enum';
 
-export class UserUpdateDTO extends BaseDto {
-  @ApiPropertyOptional({
-    description: 'The name of the user',
-    example: 'John Doe',
-  })
+export class UserUpdateDTO {
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @Length(3, 50)
   name?: string;
 
-  //   @ApiPropertyOptional({
-  //     description: 'The username of the user',
-  //     example: 'john_doe',
-  //   })
-  //   @IsOptional()
-  //   @IsString()
-  //   username?: string;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 
-  //   @ApiPropertyOptional({
-  //     description: 'The email of the user',
-  //     example: 'john@example.com',
-  //   })
-  //   @IsOptional()
-  //   @IsEmail()
-  //   email?: string;
-
-  @ApiPropertyOptional({
-    description: 'The password of the user',
-    example: 'newpassword123',
-  })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MinLength(6)
+  @Length(6, 100)
   password?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEnum(UserStatus)
+  status?: UserStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  avatar?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Length(5, 20)
+  phone?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Length(0, 255)
+  address?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  bio?: string;
 }

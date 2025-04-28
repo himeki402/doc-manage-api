@@ -32,7 +32,7 @@ export class CategoryController {
   @Public()
   @Get()
   async getAllCategories() {
-    const data = await this.categoryService.findAll();
+    const data = await this.categoryService.findAllWithDocumentCount();
     return ResponseData.success(data, 'Categories retrieved successfully');
   }
   @Public()

@@ -2,7 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Category } from './category.entity';
 import { Repository } from 'typeorm';
-import { CreateCategoryDto, UpdateCategoryDto } from './dto/CategoryDto';
+import {
+  CategoryResponseDto,
+  CreateCategoryDto,
+  UpdateCategoryDto,
+} from './dto/CategoryDto';
 
 @Injectable()
 export class CategoryService {
@@ -23,7 +27,7 @@ export class CategoryService {
         );
       }
     }
-    if (createCategoryDto.slug){
+    if (createCategoryDto.slug) {
       const existingCategory = await this.categoryRepository.findOne({
         where: { slug: createCategoryDto.slug },
       });
@@ -33,6 +37,53 @@ export class CategoryService {
     }
     const category = this.categoryRepository.create(createCategoryDto);
     return this.categoryRepository.save(category);
+  }
+
+  async transformCategoryToResponseDto(
+    category: Category,
+  ): Promise<CategoryResponseDto> {
+    const documentCount = await this.countDocumentsByCategory(category.id);
+
+    const responseDto: CategoryResponseDto = {
+      id: category.id,
+      name: category.name,
+      description: category.description,
+      parent_id: category.parent_id,
+      slug: category.slug,
+      parent: category.parent
+        ? await this.transformCategoryToResponseDto(category.parent)
+        : undefined,
+      children: category.children
+        ? await Promise.all(
+            category.children.map((child) =>
+              this.transformCategoryToResponseDto(child),
+            ),
+          )
+        : undefined,
+      documentCount,
+      created_at: category.created_at,
+      updated_at: category.updated_at,
+    };
+
+    return responseDto;
+  }
+
+  async findAllWithDocumentCount(): Promise<CategoryResponseDto[]> {
+    const categories = await this.categoryRepository.find({
+      relations: ['parent'],
+      order: { name: 'ASC' },
+    });
+
+    return Promise.all(
+      categories.map((category) =>
+        this.transformCategoryToResponseDto(category),
+      ),
+    );
+  }
+
+  async findOneWithDocumentCount(id: string): Promise<CategoryResponseDto> {
+    const category = await this.findOne(id);
+    return this.transformCategoryToResponseDto(category);
   }
 
   async findAll(): Promise<Category[]> {
@@ -97,12 +148,9 @@ export class CategoryService {
   async remove(id: string): Promise<void> {
     const category = await this.findOne(id);
 
-    // Kiểm tra xem danh mục có chứa tài liệu không
     if (category.documents && category.documents.length > 0) {
       throw new Error('Không thể xóa danh mục đang chứa tài liệu');
     }
-
-    // Kiểm tra xem danh mục có chứa danh mục con không
     if (category.children && category.children.length > 0) {
       throw new Error('Không thể xóa danh mục đang chứa danh mục con');
     }

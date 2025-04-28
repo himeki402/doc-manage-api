@@ -1,5 +1,13 @@
 import { BaseEntity } from 'src/common/entities/base.entity';
-import { BeforeInsert, BeforeUpdate, Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
+import {
+  BeforeInsert,
+  BeforeUpdate,
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+} from 'typeorm';
 import { Document } from '../document/entity/document.entity';
 import slugify from 'slugify';
 
@@ -28,7 +36,7 @@ export class Category extends BaseEntity {
   @BeforeUpdate()
   generateSlug() {
     if (!this.slug && this.name) {
-      this.slug = slugify(this.name); 
+      this.slug = slugify(this.name);
     }
   }
 }

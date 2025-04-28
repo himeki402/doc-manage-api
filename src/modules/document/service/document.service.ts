@@ -63,7 +63,7 @@ export class DocumentService {
 
     // Check group if document belongs to a group
     let group: Group | null = null;
-    if (dtoInstance.type === DocumentType.GROUP && dtoInstance.groupId) {
+    if (dtoInstance.accessType === DocumentType.GROUP && dtoInstance.groupId) {
       group = await this.groupRepository.findOne({
         where: { id: dtoInstance.groupId },
         relations: ['groupAdmin'],
@@ -81,6 +81,19 @@ export class DocumentService {
       }
     }
 
+    // Check if category exists
+    let category: Category | null = null;
+    if (dtoInstance.categoryId) {
+      category = await this.categoryRepository.findOne({
+        where: { id: dtoInstance.categoryId },
+      });
+      if (!category) {
+        throw new NotFoundException(
+          `Category with ID '${dtoInstance.categoryId}' not found`,
+        );
+      }
+    }
+
     // Create document
     const document = this.documentRepository.create({
       title: dtoInstance.title,
@@ -91,9 +104,9 @@ export class DocumentService {
       filePath: fileInfo?.key,
       fileUrl: fileInfo?.url,
       mimeType: file?.mimetype,
-      accessType: dtoInstance.type || DocumentType.PRIVATE,
+      accessType: dtoInstance.accessType || DocumentType.PRIVATE,
       createdBy: { id: userId } as User,
-      category: dtoInstance.categoryId,
+      category: category || undefined,
       group: group || undefined,
       metadata: dtoInstance.metadata,
     } as Partial<Document>);
@@ -114,7 +127,7 @@ export class DocumentService {
     // Load complete document with relations
     const completeDocument = await this.documentRepository.findOne({
       where: { id: savedDocument.id },
-      relations: ['createdBy', 'group'],
+      relations: ['createdBy', 'group', 'category'],
     });
 
     if (!completeDocument) {
@@ -128,6 +141,7 @@ export class DocumentService {
         createdById: completeDocument.createdBy.id,
         createdByName: completeDocument.createdBy.name,
         groupName: completeDocument.group?.name,
+        categoryName: completeDocument.category?.name,
       },
       {
         excludeExtraneousValues: true,
@@ -218,18 +232,102 @@ export class DocumentService {
     userId: string,
     updateData: UpdateDocumentDto,
   ): Promise<DocumentResponseDto> {
+    // Tìm document cần cập nhật
     const document = await this.documentRepository.findOne({
-      where: { id, createdBy: { id: userId } },
-      relations: ['createdBy', 'group'],
+      where: { id },
+      relations: ['createdBy', 'group', 'category'],
     });
 
     if (!document) {
-      throw new HttpException('Document not found', HttpStatus.NOT_FOUND);
+      throw new NotFoundException('Document not found');
     }
 
-    Object.assign(document, updateData);
+    // Kiểm tra quyền cập nhật
+    if (document.createdBy.id !== userId) {
+      const permission = await this.documentPermissionRepository.findOne({
+        where: {
+          document_id: id,
+          entity_type: EntityType.USER,
+          entity_id: userId,
+          permission_type: PermissionType.WRITE,
+        },
+      });
+      if (!permission) {
+        throw new ForbiddenException(
+          'You do not have permission to update this document',
+        );
+      }
+    }
+
+    // Kiểm tra và cập nhật category nếu có
+    if (
+      updateData.categoryId &&
+      updateData.categoryId !== document.category?.id
+    ) {
+      const category = await this.categoryRepository.findOne({
+        where: { id: updateData.categoryId },
+      });
+      if (!category) {
+        throw new NotFoundException(
+          `Category with ID '${updateData.categoryId}' not found`,
+        );
+      }
+      document.category = category;
+    }
+
+    // Kiểm tra và cập nhật group nếu có
+    if (updateData.accessType === DocumentType.GROUP && updateData.groupId) {
+      if (document.group?.id !== updateData.groupId) {
+        const group = await this.groupRepository.findOne({
+          where: { id: updateData.groupId },
+        });
+        if (!group) {
+          throw new NotFoundException(
+            `Group with ID '${updateData.groupId}' not found`,
+          );
+        }
+
+        // Kiểm tra xem người dùng có phải là thành viên của nhóm không
+        const groupMember = await this.groupMemberRepository.findOne({
+          where: { group_id: updateData.groupId, user_id: userId },
+        });
+        if (!groupMember) {
+          throw new ForbiddenException('You are not a member of this group');
+        }
+        document.group = group;
+      }
+    } else if (
+      updateData.accessType &&
+      updateData.accessType !== DocumentType.GROUP
+    ) {
+      // Nếu chuyển từ GROUP sang loại khác, xóa liên kết với group
+      document.group = undefined;
+    }
+
+    // Cập nhật các trường cơ bản
+    if (updateData.title) document.title = updateData.title;
+    if (updateData.description) document.description = updateData.description;
+    if (updateData.content) document.content = updateData.content;
+    if (updateData.metadata) document.metadata = updateData.metadata;
+    if (updateData.accessType) document.accessType = updateData.accessType;
+
+    // Lưu document đã cập nhật
     const updatedDocument = await this.documentRepository.save(document);
-    return this.mapToResponseDto(updatedDocument);
+
+    // Trả về document đã cập nhật
+    return plainToInstance(
+      DocumentResponseDto,
+      {
+        ...updatedDocument,
+        createdById: updatedDocument.createdBy.id,
+        createdByName: updatedDocument.createdBy.name,
+        groupName: updatedDocument.group?.name,
+        categoryName: updatedDocument.category?.name,
+      },
+      {
+        excludeExtraneousValues: true,
+      },
+    );
   }
 
   async remove(id: string, userId: string): Promise<void> {
@@ -264,33 +362,93 @@ export class DocumentService {
     });
   }
 
+  /**
+   * Lấy tất cả document cho admin sử dụng
+   * @param query - thông tin query (page, limit, search)
+   * @returns Danh sách Document với đầy đủ thông tin
+   */
   async getAllDocuments(query: GetDocumentsDto) {
-    const { page = 1, limit = 10, search } = query;
+    const { page = 1, limit = 10, search, categoryId, accessType } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.documentRepository
       .createQueryBuilder('document')
+      .leftJoinAndSelect('document.createdBy', 'createdBy')
+      .leftJoinAndSelect('document.category', 'category')
+      .leftJoinAndSelect('document.group', 'group')
       .select([
         'document.id',
         'document.title',
         'document.description',
+        'document.content',
+        'document.fileName',
+        'document.fileSize',
+        'document.fileUrl',
+        'document.mimeType',
         'document.accessType',
         'document.created_at',
+        'document.updated_at',
+        'document.metadata',
+        'document.slug',
+        'createdBy.id',
+        'createdBy.name',
+        'createdBy.email',
+        'category.id',
+        'category.name',
+        'category.slug',
+        'group.id',
+        'group.name',
       ]);
 
+    // Áp dụng các điều kiện tìm kiếm
     if (search) {
-      queryBuilder.andWhere('document.title LIKE :search', {
-        search: `%${search}%`,
+      queryBuilder.andWhere(
+        '(document.title LIKE :search OR document.description LIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    // Lọc theo category nếu có
+    if (categoryId) {
+      queryBuilder.andWhere('category.id = :categoryId', { categoryId });
+    }
+
+    // Lọc theo accessType nếu có
+    if (accessType) {
+      queryBuilder.andWhere('document.accessType = :accessType', {
+        accessType,
       });
     }
 
+    // Sắp xếp theo thời gian tạo mới nhất
+    queryBuilder.orderBy('document.created_at', 'DESC');
+
+    // Thực hiện truy vấn với phân trang
     const [documents, total] = await queryBuilder
       .skip(skip)
       .take(limit)
       .getManyAndCount();
 
-    const data = documents.map((doc) => this.mapToResponseDto(doc));
+    // Chuyển đổi kết quả sang DTO
+    const data = documents.map((doc) => {
+      return plainToInstance(
+        DocumentResponseDto,
+        {
+          ...doc,
+          createdById: doc.createdBy?.id,
+          createdByName: doc.createdBy?.name,
+          categoryId: doc.category?.id,
+          categoryName: doc.category?.name,
+          groupId: doc.group?.id,
+          groupName: doc.group?.name,
+        },
+        {
+          excludeExtraneousValues: true,
+        },
+      );
+    });
 
+    // Trả về kết quả với metadata phân trang
     return {
       data,
       meta: {
@@ -308,7 +466,7 @@ export class DocumentService {
    * @returns Danh sách Document
    */
   async getDocumentsByCategory(query: GetDocumentsDto) {
-    const { page = 1, limit = 10, categoryId } = query;
+    const { page = 1, limit = 10, categoryId, slug } = query;
     const skip = (page - 1) * limit;
 
     // Kiểm tra xem category có tồn tại không
@@ -335,7 +493,8 @@ export class DocumentService {
         'createdBy.id',
         'createdBy.name',
       ])
-      .where('category.id = :categoryId', { categoryId });
+      .where('category.id = :categoryId', { categoryId })
+      .orWhere('category.slug = :categorySlug', { slug });
 
     const [documents, total] = await queryBuilder
       .skip(skip)

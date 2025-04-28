@@ -47,4 +47,9 @@ export class GetDocumentsDto {
   @IsString()
   @IsOptional()
   categoryId?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  slug?: string;
 }

@@ -18,18 +18,43 @@ export class DocumentResponseDto extends BaseDto {
 
   @Expose()
   @ApiProperty()
-  @ApiProperty()
   createdById: string;
 
   @Expose()
   @ApiProperty()
   createdByName: string;
 
+  @Expose()
   @ApiPropertyOptional()
   categoryId?: string;
 
+  @Expose()
   @ApiPropertyOptional()
   categoryName?: string;
+
+  @Expose()
+  @ApiPropertyOptional()
+  groupId?: string;
+
+  @Expose()
+  @ApiPropertyOptional()
+  groupName?: string;
+
+  @Expose()
+  @ApiPropertyOptional()
+  fileName?: string;
+
+  @Expose()
+  @ApiPropertyOptional()
+  fileUrl?: string;
+
+  @Expose()
+  @ApiPropertyOptional()
+  fileSize?: number;
+
+  @Expose()
+  @ApiPropertyOptional()
+  mimeType?: string;
 
   // @ApiProperty()
   // isArchived: boolean;
@@ -47,4 +72,8 @@ export class DocumentResponseDto extends BaseDto {
   @Expose()
   @ApiProperty()
   created_at: Date;
+
+  @Expose()
+  @ApiProperty()
+  slug: string;
 }

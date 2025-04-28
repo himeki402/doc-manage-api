@@ -50,8 +50,11 @@ export class DocumentController {
   @Get('public')
   async getPublicDocuments(@Query() query: GetDocumentsDto) {
     const result = await this.documentService.getDocumentsPublic(query);
-    return ResponseData.success(
-      result,
+    return ResponseData.paginate(
+      result.data,
+      result.meta.total,
+      result.meta.page,
+      result.meta.limit,
       'Public documents retrieved successfully',
     );
   }
@@ -61,7 +64,13 @@ export class DocumentController {
   @Get('admin')
   async getAllDocuments(@Query() query: GetDocumentsDto) {
     const result = await this.documentService.getAllDocuments(query);
-    return ResponseData.success(result, 'All documents retrieved successfully');
+    return ResponseData.paginate(
+      result.data,
+      result.meta.total,
+      result.meta.page,
+      result.meta.limit,
+      'All documents retrieved successfully',
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -75,8 +84,11 @@ export class DocumentController {
       query,
       request.user.id,
     );
-    return ResponseData.success(
-      result,
+    return ResponseData.paginate(
+      result.data,
+      result.meta.total,
+      result.meta.page,
+      result.meta.limit,
       'User documents retrieved successfully',
     );
   }

@@ -83,6 +83,9 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException();
     }
+
+    await this.userService.updateLastLogin(user.id);
+
     const userResponse = plainToInstance(UserResponseDto, user, {
       excludeExtraneousValues: true,
     });
