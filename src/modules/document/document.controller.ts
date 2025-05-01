@@ -94,7 +94,7 @@ export class DocumentController {
   }
 
   @Public()
-  @Get('by-categoryId')
+  @Get('by-category')
   async getDocumentsByCategory(@Query() query: GetDocumentsDto) {
     const result = await this.documentService.getDocumentsByCategory(query);
     return ResponseData.success(

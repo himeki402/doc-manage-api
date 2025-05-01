@@ -43,6 +43,9 @@ export class Document extends BaseEntity {
   fileUrl?: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
+  thumbnailUrl?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
   slug?: string;
 
   @Column({ type: 'text', nullable: true })
@@ -50,6 +53,21 @@ export class Document extends BaseEntity {
 
   @Column({ type: 'enum', enum: DocumentType, default: DocumentType.PRIVATE })
   accessType: DocumentType;
+
+  @Column({ type: 'int', default: 0 })
+  ratingCount: number;
+
+  @Column({ type: 'int', default: 0 })
+  view?: number;
+
+  @Column({ type: 'int', default: 0 })
+  likeCount: number;
+
+  @Column({ type: 'int', default: 0 })
+  dislikeCount: number;
+
+  @Column({ type: 'int', default: 0 })
+  rating: number;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, any>;
@@ -91,6 +109,17 @@ export class Document extends BaseEntity {
   generateSlug() {
     if (!this.slug && this.title) {
       this.slug = slugify(this.title);
+    }
+  }
+
+  @BeforeInsert()
+  @BeforeUpdate()
+  setRating() {
+    if (this.ratingCount > 0) {
+      const total = this.likeCount + this.dislikeCount;
+      this.rating = Math.round((this.likeCount / total) * 100);
+    } else {
+      this.rating = 0;
     }
   }
 }

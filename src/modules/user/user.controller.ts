@@ -8,7 +8,7 @@ import { SystemRole } from 'src/common/enum/systemRole.enum';
 import { GetUsersDto } from './dto/get-users.dto';
 import { ResponseData } from 'src/helpers/response.helper';
 
-@Controller('user')
+@Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 

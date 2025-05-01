@@ -155,12 +155,22 @@ export class DocumentService {
 
     const queryBuilder = this.documentRepository
       .createQueryBuilder('document')
+      .leftJoinAndSelect('document.createdBy', 'createdBy')
+      .leftJoinAndSelect('document.category', 'category')
+      .leftJoinAndSelect('document.documentTags', 'documentTag')
       .select([
         'document.id',
         'document.title',
         'document.description',
+        'document.mimeType',
         'document.accessType',
         'document.created_at',
+        'document.likeCount',
+        'document.view',
+        'document.rating',
+        'document.ratingCount',
+        'createdBy.name',
+        'document.slug',
       ])
       .where('document.accessType = :accessType', {
         accessType: DocumentType.PUBLIC,
@@ -376,6 +386,8 @@ export class DocumentService {
       .leftJoinAndSelect('document.createdBy', 'createdBy')
       .leftJoinAndSelect('document.category', 'category')
       .leftJoinAndSelect('document.group', 'group')
+      .leftJoinAndSelect('document.documentTags', 'documentTags')
+      .leftJoinAndSelect('documentTags.tag', 'tag')
       .select([
         'document.id',
         'document.title',
@@ -389,6 +401,10 @@ export class DocumentService {
         'document.created_at',
         'document.updated_at',
         'document.metadata',
+        'document.likeCount',
+        'document.view',
+        'document.rating',
+        'document.ratingCount',
         'document.slug',
         'createdBy.id',
         'createdBy.name',
@@ -396,6 +412,10 @@ export class DocumentService {
         'category.id',
         'category.name',
         'category.slug',
+        'documentTags.document_id',
+        'documentTags.tag_id',
+        'tag.id',
+        'tag.name',
         'group.id',
         'group.name',
       ]);
@@ -429,8 +449,14 @@ export class DocumentService {
       .take(limit)
       .getManyAndCount();
 
-    // Chuyển đổi kết quả sang DTO
     const data = documents.map((doc) => {
+      // Xử lý tags
+      const tags = doc.documentTags
+        ? doc.documentTags.map((dt) => ({
+            id: dt.tag.id,
+            name: dt.tag.name,
+          }))
+        : [];
       return plainToInstance(
         DocumentResponseDto,
         {
@@ -439,8 +465,10 @@ export class DocumentService {
           createdByName: doc.createdBy?.name,
           categoryId: doc.category?.id,
           categoryName: doc.category?.name,
+          categorySlug: doc.category?.slug,
           groupId: doc.group?.id,
           groupName: doc.group?.name,
+          tags: tags,
         },
         {
           excludeExtraneousValues: true,
@@ -468,14 +496,31 @@ export class DocumentService {
   async getDocumentsByCategory(query: GetDocumentsDto) {
     const { page = 1, limit = 10, categoryId, slug } = query;
     const skip = (page - 1) * limit;
-
-    // Kiểm tra xem category có tồn tại không
-    const categoryExists = await this.categoryRepository.findOne({
-      where: { id: categoryId },
-    });
-    if (!categoryExists) {
-      throw new NotFoundException(`Category with ID '${categoryId}' not found`);
+    let categoryExists;
+    if (categoryId) {
+      categoryExists = await this.categoryRepository.findOne({
+        where: { id: categoryId },
+      });
+      if (!categoryExists) {
+        throw new NotFoundException(
+          `Category with ID '${categoryId}' not found`,
+        );
+      }
+    } else if (slug) {
+      categoryExists = await this.categoryRepository.findOne({
+        where: { slug },
+      });
+      if (!categoryExists) {
+        throw new NotFoundException(`Category with slug '${slug}' not found`);
+      }
+    } else {
+      throw new BadRequestException(
+        'Either categoryId or slug must be provided',
+      );
     }
+
+    // Lấy danh sách tất cả các category con (bao gồm cả category hiện tại)
+    const allCategoryIds = await this.getAllChildCategoryIds(categoryExists.id);
 
     const queryBuilder = this.documentRepository
       .createQueryBuilder('document')
@@ -488,20 +533,69 @@ export class DocumentService {
         'document.accessType',
         'document.created_at',
         'document.category_id',
+        'document.thumbnailUrl',
+        'document.rating',
+        'document.ratingCount',
+        'document.view',
+        'document.mimeType',
         'category.id',
         'category.name',
+        'category.slug',
         'createdBy.id',
         'createdBy.name',
-      ])
-      .where('category.id = :categoryId', { categoryId })
-      .orWhere('category.slug = :categorySlug', { slug });
+      ]);
+
+    if (categoryId && slug) {
+      queryBuilder.where(
+        '(category.id IN (:...allCategoryIds) OR category.slug = :slug)',
+        {
+          allCategoryIds,
+          slug,
+        },
+      );
+    } else if (categoryId) {
+      queryBuilder.where('category.id IN (:...allCategoryIds)', {
+        allCategoryIds,
+      });
+    } else if (slug) {
+      queryBuilder.where('category.id IN (:...allCategoryIds)', {
+        allCategoryIds,
+      });
+    } else {
+      throw new BadRequestException(
+        'Either categoryId or slug must be provided',
+      );
+    }
 
     const [documents, total] = await queryBuilder
       .skip(skip)
       .take(limit)
       .getManyAndCount();
 
-    const data = documents.map((doc) => this.mapToResponseDto(doc));
+    const data = documents.map((doc) => {
+      // Xử lý tags
+      const tags = doc.documentTags
+        ? doc.documentTags.map((dt) => ({
+            id: dt.tag.id,
+            name: dt.tag.name,
+          }))
+        : [];
+      return plainToInstance(
+        DocumentResponseDto,
+        {
+          ...doc,
+          createdById: doc.createdBy?.id,
+          createdByName: doc.createdBy?.name,
+          categoryId: doc.category?.id,
+          categorySlug: doc.category?.slug,
+          categoryName: doc.category?.name,
+          tags: tags,
+        },
+        {
+          excludeExtraneousValues: true,
+        },
+      );
+    });
 
     return {
       data,
@@ -512,6 +606,34 @@ export class DocumentService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  /**
+   * Lấy tất cả ID của category con (bao gồm cả category hiện tại)
+   * @param categoryId - ID của category cha
+   * @returns Mảng chứa ID của tất cả category con và category cha
+   */
+  private async getAllChildCategoryIds(categoryId: string): Promise<string[]> {
+    // Thêm category hiện tại vào danh sách
+    const categoryIds = [categoryId];
+
+    // Tìm tất cả category con trực tiếp
+    const childCategories = await this.categoryRepository.find({
+      where: { parent_id: categoryId },
+    });
+
+    // Nếu có category con
+    if (childCategories.length > 0) {
+      // Đệ quy tìm tất cả category con của mỗi category con
+      for (const childCategory of childCategories) {
+        const childCategoryIds = await this.getAllChildCategoryIds(
+          childCategory.id,
+        );
+        categoryIds.push(...childCategoryIds);
+      }
+    }
+
+    return categoryIds;
   }
 
   async getMyDocuments(query: GetDocumentsDto, userId: string) {

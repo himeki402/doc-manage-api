@@ -35,6 +35,7 @@ export class CategoryController {
     const data = await this.categoryService.findAllWithDocumentCount();
     return ResponseData.success(data, 'Categories retrieved successfully');
   }
+
   @Public()
   @Get(':id')
   async getCategory(@Param('id') id: string) {
@@ -60,5 +61,4 @@ export class CategoryController {
     await this.categoryService.remove(id);
     return ResponseData.success(null, 'Category deleted successfully');
   }
-
 }

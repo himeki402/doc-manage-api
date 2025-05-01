@@ -25,6 +25,26 @@ export class DocumentResponseDto extends BaseDto {
   createdByName: string;
 
   @Expose()
+  @ApiProperty()
+  likeCount: number;
+
+  @Expose()
+  @ApiProperty()
+  dislikeCount: number;
+
+  @Expose()
+  @ApiProperty()
+  ratingCount: number;
+
+  @Expose()
+  @ApiProperty()
+  view: number;
+
+  @Expose()
+  @ApiProperty()
+  rating: number;
+
+  @Expose()
   @ApiPropertyOptional()
   categoryId?: string;
 
@@ -76,4 +96,8 @@ export class DocumentResponseDto extends BaseDto {
   @Expose()
   @ApiProperty()
   slug: string;
+
+  @Expose()
+  @ApiPropertyOptional()
+  categorySlug?: string;
 }
