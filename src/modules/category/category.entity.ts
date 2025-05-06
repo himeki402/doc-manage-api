@@ -15,7 +15,7 @@ import slugify from 'slugify';
 export class Category extends BaseEntity {
   @Column({ type: 'varchar', length: 255, nullable: false })
   name: string;
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   description?: string;
   @Column({ nullable: true })
   parent_id?: string;

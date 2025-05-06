@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import {
   CategoryResponseDto,
   CreateCategoryDto,
+  GetCategoryDto,
   UpdateCategoryDto,
 } from './dto/CategoryDto';
 
@@ -101,6 +102,21 @@ export class CategoryService {
 
     if (!category) {
       throw new NotFoundException(`Không tìm thấy danh mục với ID: ${id}`);
+    }
+
+    return category;
+  }
+
+  async findBySlug(slug: string): Promise<Category> {
+    const category = await this.categoryRepository.findOne({
+      where: { slug },
+      relations: ['parent', 'children', 'documents'],
+    });
+
+    if (!category) {
+      throw new NotFoundException(
+        'Không tìm thấy danh mục với thông tin đã cung cấp',
+      );
     }
 
     return category;

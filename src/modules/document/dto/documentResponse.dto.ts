@@ -100,4 +100,7 @@ export class DocumentResponseDto extends BaseDto {
   @Expose()
   @ApiPropertyOptional()
   categorySlug?: string;
+
+  @Expose()
+  thumbnailUrl: string;
 }

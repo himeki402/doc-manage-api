@@ -7,9 +7,10 @@ import {
   Delete,
   Param,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { CategoryService } from './category.service';
-import { CreateCategoryDto } from './dto/CategoryDto';
+import { CreateCategoryDto, GetCategoryDto } from './dto/CategoryDto';
 import { SystemRole } from 'src/common/enum/systemRole.enum';
 import { ResponseData } from 'src/helpers/response.helper';
 import { RolesGuard } from '../auth/guard/roles.guard';
@@ -40,6 +41,13 @@ export class CategoryController {
   @Get(':id')
   async getCategory(@Param('id') id: string) {
     const data = await this.categoryService.findOne(id);
+    return ResponseData.success(data, 'Category retrieved successfully');
+  }
+
+  @Public()
+  @Get('slug/:slug')
+  async getCategoryBySlug(@Param('slug') slug: string) {
+    const data = await this.categoryService.findBySlug(slug);
     return ResponseData.success(data, 'Category retrieved successfully');
   }
 

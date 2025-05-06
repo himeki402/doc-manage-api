@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from "class-validator";
+import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateCategoryDto {
   @IsNotEmpty()
@@ -35,4 +35,14 @@ export class CategoryResponseDto {
   documentCount: number;
   created_at: Date;
   updated_at: Date;
+}
+
+export class GetCategoryDto {
+  @IsOptional()
+  @IsString()
+  slug: string;
+
+  @IsOptional()
+  @IsUUID()
+  id: string;
 }

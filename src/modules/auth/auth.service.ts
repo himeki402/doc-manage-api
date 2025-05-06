@@ -105,15 +105,15 @@ export class AuthService {
     return currentUser;
   }
   async assignJwtToCookie(token: string) {
-    return `Authentication=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get('JWT_EXPIRATION_TIME')}`;
+    return `accessToken=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get('JWT_EXPIRATION_TIME')}`;
   }
   async getCookieWithJwtToken(userId: string) {
     const payload: TokenPayload = { sub: userId };
     const token = await this.jwtService.signAsync(payload);
-    return `Authentication=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get('JWT_EXPIRATION_TIME')}`;
+    return `accessToken=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get('JWT_EXPIRATION_TIME')}`;
   }
 
   public getCookieForLogOut() {
-    return `Authentication=; HttpOnly; Path=/; Max-Age=0`;
+    return `accessToken=; HttpOnly; Path=/; Max-Age=0`;
   }
 }

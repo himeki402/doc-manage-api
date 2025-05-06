@@ -12,6 +12,8 @@ import { DocumentVersion } from './entity/documentVersion.entity';
 import { GroupMember } from '../group/groupMember';
 import { AwsS3Service } from './service/aws-s3.service';
 import { Category } from '../category/category.entity';
+import { CloudinaryService } from './service/cloudinary.service';
+import { ThumbnailService } from './service/thumbnail.service';
 
 @Module({
   imports: [
@@ -44,7 +46,12 @@ import { Category } from '../category/category.entity';
     }),
   ],
   controllers: [DocumentController],
-  providers: [DocumentService, AwsS3Service],
+  providers: [
+    DocumentService,
+    AwsS3Service,
+    CloudinaryService,
+    ThumbnailService,
+  ],
   exports: [TypeOrmModule],
 })
 export class DocumentModule {}

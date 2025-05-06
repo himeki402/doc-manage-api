@@ -92,7 +92,7 @@ export class AuthController {
   @Get('me')
   async getMe(@Req() request: RequestWithUser) {
     try {
-      console.log('User details:', request.user.id);
+      console.log('User details:', request.user.role);
       const userResponse = await this.userService.getProfile(request.user.id);
       return ResponseData.success(userResponse, 'User authenticated');
     } catch (error) {

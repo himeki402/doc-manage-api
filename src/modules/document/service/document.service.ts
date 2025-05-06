@@ -24,6 +24,7 @@ import { EntityType } from 'src/common/enum/entityType.enum';
 import { PermissionType } from 'src/common/enum/permissionType.enum';
 import { AwsS3Service } from './aws-s3.service';
 import { Category } from 'src/modules/category/category.entity';
+import { ThumbnailService } from './thumbnail.service';
 
 @Injectable()
 export class DocumentService {
@@ -39,6 +40,7 @@ export class DocumentService {
     @InjectRepository(GroupMember)
     private readonly groupMemberRepository: Repository<GroupMember>,
     private readonly awsS3Service: AwsS3Service,
+    private readonly thumbnailService: ThumbnailService,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
   ) {}
@@ -57,8 +59,11 @@ export class DocumentService {
 
     // Upload file to AWS S3 if exists
     let fileInfo: { key: string; url: string } | null = null;
+    let thumbnailInfo: { thumbnailUrl: string; thumbnailKey?: string } | null =
+      null;
     if (file) {
       fileInfo = await this.awsS3Service.uploadFile(file);
+      thumbnailInfo = await this.thumbnailService.generateThumbnail(file);
     }
 
     // Check group if document belongs to a group
