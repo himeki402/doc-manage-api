@@ -24,40 +24,67 @@ export class ThumbnailService {
       if (mimeType === 'application/pdf') {
         try {
           // Tạo thư mục uploads nếu chưa tồn tại
-          const uploadsDir = path.join(process.cwd(), 'uploads');
+          const uploadsDir = path.resolve(process.cwd(), 'uploads');
+          this.logger.log(`Thư mục uploads: ${uploadsDir}`);
+
           if (!fs.existsSync(uploadsDir)) {
             fs.mkdirSync(uploadsDir, { recursive: true });
           }
 
-          // Tạo tên file tạm thời
-          const tempPdfPath = path.join(uploadsDir, `temp-${Date.now()}.pdf`);
-          const tempPngPath = path.join(uploadsDir, `temp-${Date.now()}.png`);
+          const timestamp = Date.now();
+          const tempPdfPath = path.join(uploadsDir, `temp-${timestamp}.pdf`);
 
-          // Ghi file PDF tạm thời
+          const tempPngBasePath = path.join(uploadsDir, `temp-${timestamp}`);
+
           fs.writeFileSync(tempPdfPath, file.buffer);
+
+          if (!fs.existsSync(tempPdfPath)) {
+            throw new Error(`Không thể tạo file PDF tạm thời: ${tempPdfPath}`);
+          }
 
           // Sử dụng poppler để chuyển đổi trang đầu tiên của PDF sang PNG
           const options = {
             firstPageToConvert: 1,
             lastPageToConvert: 1,
             pngFile: true,
-            scale: 300, // DPI cao hơn cho chất lượng tốt
           };
 
-          await this.poppler.pdfToCairo(tempPdfPath, tempPngPath, options);
+          await this.poppler.pdfToCairo(tempPdfPath, tempPngBasePath, options);
 
-          // Đọc file PNG đã tạo
-          const pngBuffer = fs.readFileSync(tempPngPath);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
 
-          // Tối ưu hóa hình ảnh với sharp
+          const files = fs.readdirSync(uploadsDir);
+          const pngFile = files.find(
+            (file) =>
+              file.startsWith(`temp-${timestamp}`) && file.endsWith('.png'),
+          );
+
+          if (!pngFile) {
+            throw new Error(
+              `Không thể tìm thấy file PNG được tạo từ ${tempPngBasePath}`,
+            );
+          }
+
+          const actualPngFilePath = path.join(uploadsDir, pngFile);
+
+          const pngBuffer = fs.readFileSync(actualPngFilePath);
+
           const optimizedBuffer = await sharp(pngBuffer)
             .resize(600, 800, { fit: 'inside' })
             .jpeg({ quality: 80 })
             .toBuffer();
 
           // Xóa các file tạm
-          fs.unlinkSync(tempPdfPath);
-          fs.unlinkSync(tempPngPath);
+          try {
+            if (fs.existsSync(tempPdfPath)) {
+              fs.unlinkSync(tempPdfPath);
+            }
+            if (fs.existsSync(actualPngFilePath)) {
+              fs.unlinkSync(actualPngFilePath);
+            }
+          } catch (cleanupError) {
+            this.logger.warn(`Lỗi khi xóa file tạm: ${cleanupError.message}`);
+          }
 
           // Tải lên Cloudinary
           const cloudinaryResult =
@@ -68,13 +95,11 @@ export class ThumbnailService {
             `Lỗi khi tạo thumbnail từ PDF: ${pdfError.message}`,
             pdfError.stack,
           );
-          // Nếu xử lý PDF thất bại, trả về thumbnail mặc định
           return {
             thumbnailUrl: `${process.env.APP_URL}/assets/default-thumbnails/pdf.png`,
           };
         }
       } else {
-        // Trả về thumbnail mặc định cho các loại file khác
         return {
           thumbnailUrl: `${process.env.APP_URL}/assets/default-thumbnails/${this.getDefaultThumbnail(
             mimeType,

@@ -25,6 +25,7 @@ import { PermissionType } from 'src/common/enum/permissionType.enum';
 import { AwsS3Service } from './aws-s3.service';
 import { Category } from 'src/modules/category/category.entity';
 import { ThumbnailService } from './thumbnail.service';
+import { HttpService } from '@nestjs/axios';
 
 @Injectable()
 export class DocumentService {
@@ -43,6 +44,7 @@ export class DocumentService {
     private readonly thumbnailService: ThumbnailService,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
+    private httpService: HttpService,
   ) {}
 
   async createDocument(
@@ -61,9 +63,16 @@ export class DocumentService {
     let fileInfo: { key: string; url: string } | null = null;
     let thumbnailInfo: { thumbnailUrl: string; thumbnailKey?: string } | null =
       null;
+    let extractedContent = '';
     if (file) {
       fileInfo = await this.awsS3Service.uploadFile(file);
       thumbnailInfo = await this.thumbnailService.generateThumbnail(file);
+
+      if (file.mimetype === 'application/pdf' && fileInfo?.url) {
+        extractedContent = await this.extractPdfContentFromService(
+          fileInfo.url,
+        );
+      }
     }
 
     // Check group if document belongs to a group
@@ -98,16 +107,15 @@ export class DocumentService {
         );
       }
     }
-
-    // Create document
     const document = this.documentRepository.create({
       title: dtoInstance.title,
       description: dtoInstance.description,
-      content: dtoInstance.content,
+      content: extractedContent || dtoInstance.content,
       fileName: file?.originalname,
       fileSize: file?.size,
       filePath: fileInfo?.key,
       fileUrl: fileInfo?.url,
+      thumbnailUrl: thumbnailInfo?.thumbnailUrl,
       mimeType: file?.mimetype,
       accessType: dtoInstance.accessType || DocumentType.PRIVATE,
       createdBy: { id: userId } as User,
@@ -118,7 +126,6 @@ export class DocumentService {
 
     const savedDocument = await this.documentRepository.save(document);
 
-    // Grant WRITE permission to creator
     const permission = this.documentPermissionRepository.create({
       document_id: savedDocument.id,
       entity_type: EntityType.USER,
@@ -152,6 +159,38 @@ export class DocumentService {
         excludeExtraneousValues: true,
       },
     );
+  }
+
+  private async extractPdfContentFromService(fileUrl: string): Promise<string> {
+    try {
+      // Tải file từ URL
+      const response = await this.httpService.axiosRef.get(fileUrl, {
+        responseType: 'arraybuffer',
+      });
+
+      // Chuẩn bị file để gửi đến microservice
+      const fileBuffer = Buffer.from(response.data);
+      const formData = new FormData();
+      const blob = new Blob([fileBuffer], { type: 'application/pdf' });
+      formData.append('file', blob, 'document.pdf');
+
+      // Gọi đến microservice để trích xuất nội dung
+      const extractResponse = await this.httpService.axiosRef.post(
+        'http://localhost:8000/extract-text',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        },
+      );  
+
+      // Trả về nội dung đã trích xuất
+      return extractResponse.data.text || '';
+    } catch (error) {
+      console.error('Lỗi khi trích xuất nội dung PDF:', error);
+      return '';
+    }
   }
 
   async getDocumentsPublic(query) {

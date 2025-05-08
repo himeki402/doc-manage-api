@@ -14,6 +14,7 @@ import { AwsS3Service } from './service/aws-s3.service';
 import { Category } from '../category/category.entity';
 import { CloudinaryService } from './service/cloudinary.service';
 import { ThumbnailService } from './service/thumbnail.service';
+import { HttpModule } from '@nestjs/axios';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ThumbnailService } from './service/thumbnail.service';
       DocumentVersion,
       Category,
     ]),
+    HttpModule,
     MulterModule.register({
       limits: {
         fileSize: 10 * 1024 * 1024, // 10MB

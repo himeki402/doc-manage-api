@@ -18,6 +18,7 @@ import { DocumentPermission } from './documentPermission.entity';
 import { DocumentAuditLog } from './documentAuditLog.entity';
 import { Group } from 'src/modules/group/group.entity';
 import slugify from 'slugify';
+import { ColumnMetadata } from 'typeorm/metadata/ColumnMetadata';
 
 @Entity('documents')
 export class Document extends BaseEntity {
@@ -71,6 +72,9 @@ export class Document extends BaseEntity {
 
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, any>;
+
+  @Column({ type: 'tsvector', nullable: true })
+  document_vector: string;
 
   @ManyToOne(() => Category, (category) => category.documents)
   @JoinColumn({ name: 'category_id' })
