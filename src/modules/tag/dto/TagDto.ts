@@ -53,11 +53,9 @@ export class GetTagsDto {
 }
 
 export class AddDocumentTagDto {
-  @IsUUID()
   @IsNotEmpty()
   document_id: string;
 
-  @IsUUID()
   @IsNotEmpty()
   tag_id: string;
 }

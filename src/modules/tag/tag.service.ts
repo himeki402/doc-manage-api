@@ -138,7 +138,6 @@ export class DocumentTagService {
       throw new BadRequestException('Validation failed', errors.toString());
     }
 
-    // 2. Kiểm tra sự tồn tại của document, tag, và user
     const document = await this.documentRepository.findOne({
       where: { id: createDocumentTagDto.document_id },
     });
@@ -167,22 +166,20 @@ export class DocumentTagService {
     // 3. Kiểm tra trùng lặp
     const existingTag = await this.documentTagRepository.findOne({
       where: {
-        document: { id: createDocumentTagDto.document_id },
-        tag: { id: createDocumentTagDto.tag_id },
+        document_id: createDocumentTagDto.document_id,
+        tag_id: createDocumentTagDto.tag_id,
       },
     });
     if (existingTag) {
       throw new BadRequestException('Tag is already assigned to this document');
     }
 
-    // 4. Tạo DocumentTag instance
     const documentTag = new DocumentTag();
     documentTag.document_id = createDocumentTagDto.document_id;
     documentTag.tag_id = createDocumentTagDto.tag_id;
     documentTag.added_by = user;
     documentTag.document = document;
     documentTag.tag = tag;
-    documentTag.added_by = user;
 
     // 5. Lưu DocumentTag
     const savedDocumentTag = await this.documentTagRepository.save(documentTag);
@@ -203,8 +200,8 @@ export class DocumentTagService {
     // 7. Trả về DocumentTag với các quan hệ
     const result = await this.documentTagRepository.findOne({
       where: {
-        document: { id: savedDocumentTag.document_id },
-        tag: { id: savedDocumentTag.tag_id },
+        document_id: savedDocumentTag.document_id,
+        tag_id: savedDocumentTag.tag_id,
       },
       relations: ['document', 'tag', 'added_by'],
     });

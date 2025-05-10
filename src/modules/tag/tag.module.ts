@@ -10,6 +10,7 @@ import { DocumentAuditLogService } from '../document/service/documentAuditLog.se
 import { DocumentAuditLog } from '../document/entity/documentAuditLog.entity';
 import { GroupMember } from '../group/groupMember.entity';
 import { DocumentPermission } from '../document/entity/documentPermission.entity';
+import { DocumentTagController } from './document-tag.controller';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { DocumentPermission } from '../document/entity/documentPermission.entity
       DocumentPermission,
     ]),
   ],
-  controllers: [TagController],
+  controllers: [TagController, DocumentTagController],
   providers: [TagService, DocumentTagService, DocumentAuditLogService],
   exports: [TagService, DocumentTagService],
 })
