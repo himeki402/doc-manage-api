@@ -5,7 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './user.entity';
 import { Document } from '../document/entity/document.entity';
 import { DocumentPermission } from '../document/entity/documentPermission.entity';
-import { GroupMember } from '../group/groupMember';
+import { GroupMember } from '../group/groupMember.entity';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({

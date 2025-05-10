@@ -1,5 +1,5 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
-import { GroupMember } from './groupMember';
+import { GroupMember } from './groupMember.entity';
 import { User } from '../user/user.entity';
 import { BaseEntity } from 'src/common/entities/base.entity';
 import { Document } from '../document/entity/document.entity';

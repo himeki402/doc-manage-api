@@ -1,11 +1,58 @@
-import { IsNotEmpty, IsUUID } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsInt,
+  IsIn,
+  MaxLength,
+  IsUUID,
+  IsNotEmpty,
+} from 'class-validator';
 
 export class CreateTagDto {
+  @IsString()
+  @MaxLength(50)
   name: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
 }
 
-export class CreateDocumentTagDto {
+export class UpdateTagDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+}
+
+export class GetTagsDto {
+  @IsOptional()
+  @IsInt()
+  page?: number;
+
+  @IsOptional()
+  @IsInt()
+  limit?: number;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['name', 'createdAt'])
+  sortBy?: string;
+
+  @IsOptional()
+  @IsIn(['ASC', 'DESC'])
+  sortOrder?: 'ASC' | 'DESC';
+}
+
+export class AddDocumentTagDto {
   @IsUUID()
   @IsNotEmpty()
   document_id: string;
@@ -13,8 +60,4 @@ export class CreateDocumentTagDto {
   @IsUUID()
   @IsNotEmpty()
   tag_id: string;
-
-  @IsUUID()
-  @IsNotEmpty()
-  added_by: string;
 }

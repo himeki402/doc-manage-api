@@ -1,7 +1,7 @@
 import { Exclude } from 'class-transformer';
 import { BaseEntity } from 'src/common/entities/base.entity';
 import { Column, Entity, OneToMany } from 'typeorm';
-import { GroupMember } from '../group/groupMember';
+import { GroupMember } from '../group/groupMember.entity';
 import { Group } from '../group/group.entity';
 import { Comment } from '../comment/comment.entity';
 import { DocumentTag } from '../tag/document-tags.entity';

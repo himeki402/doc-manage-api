@@ -1,12 +1,18 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { Tag } from './tag.entity';
-import { CreateDocumentTagDto, CreateTagDto } from './dto/TagDto';
+import {
+  AddDocumentTagDto,
+  CreateTagDto,
+  GetTagsDto,
+  UpdateTagDto,
+} from './dto/TagDto';
 import { DocumentTag } from './document-tags.entity';
 import { User } from '../user/user.entity';
 import { plainToInstance } from 'class-transformer';
@@ -21,13 +27,86 @@ export class TagService {
     private tagRepository: Repository<Tag>,
   ) {}
 
-  async create(createTagDto: CreateTagDto): Promise<Tag> {
+  async createTag(createTagDto: CreateTagDto): Promise<Tag> {
+    const { name } = createTagDto;
+
+    const existingTag = await this.tagRepository.findOne({ where: { name } });
+    if (existingTag) {
+      throw new BadRequestException('Tag với tên này đã tồn tại');
+    }
+
     const tag = this.tagRepository.create(createTagDto);
     return this.tagRepository.save(tag);
   }
 
-  async findAll(): Promise<Tag[]> {
-    return this.tagRepository.find();
+  async findAll(query: GetTagsDto): Promise<{
+    data: Tag[];
+    meta: { total: number; page: number; limit: number };
+  }> {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      sortBy = 'name',
+      sortOrder = 'ASC',
+    } = query;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.tagRepository.createQueryBuilder('tag');
+
+    if (search) {
+      queryBuilder.where('tag.name LIKE :search', { search: `%${search}%` });
+    }
+
+    queryBuilder.orderBy(`tag.${sortBy}`, sortOrder);
+
+    const [tags, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data: tags,
+      meta: {
+        total,
+        page,
+        limit,
+      },
+    };
+  }
+
+  async findOne(id: string): Promise<Tag> {
+    const tag = await this.tagRepository.findOne({
+      where: { id },
+      relations: ['documentTags', 'documentTags.document'],
+    });
+
+    if (!tag) {
+      throw new NotFoundException(`Không tìm thấy tag với ID: ${id}`);
+    }
+
+    return tag;
+  }
+
+  async update(id: string, updateTagDto: UpdateTagDto): Promise<Tag> {
+    const tag = await this.findOne(id);
+
+    if (updateTagDto.name && updateTagDto.name !== tag.name) {
+      const existingTag = await this.tagRepository.findOne({
+        where: { name: updateTagDto.name },
+      });
+      if (existingTag) {
+        throw new BadRequestException('Tag với tên này đã tồn tại');
+      }
+    }
+
+    Object.assign(tag, updateTagDto);
+    return this.tagRepository.save(tag);
+  }
+
+  async remove(id: string): Promise<void> {
+    const tag = await this.findOne(id);
+    await this.tagRepository.remove(tag);
   }
 }
 
@@ -46,11 +125,12 @@ export class DocumentTagService {
   ) {}
 
   async create(
-    createDocumentTagDto: CreateDocumentTagDto,
+    createDocumentTagDto: AddDocumentTagDto,
+    userId: string,
   ): Promise<DocumentTag> {
     // 1. Validate DTO
     const dtoInstance = plainToInstance(
-      CreateDocumentTagDto,
+      AddDocumentTagDto,
       createDocumentTagDto,
     );
     const errors = await validate(dtoInstance);
@@ -78,12 +158,10 @@ export class DocumentTagService {
     }
 
     const user = await this.userRepository.findOne({
-      where: { id: createDocumentTagDto.added_by },
+      where: { id: userId },
     });
     if (!user) {
-      throw new NotFoundException(
-        `User with ID ${createDocumentTagDto.added_by} not found`,
-      );
+      throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
     // 3. Kiểm tra trùng lặp
@@ -98,7 +176,10 @@ export class DocumentTagService {
     }
 
     // 4. Tạo DocumentTag instance
-    const documentTag = plainToInstance(DocumentTag, createDocumentTagDto);
+    const documentTag = new DocumentTag();
+    documentTag.document_id = createDocumentTagDto.document_id;
+    documentTag.tag_id = createDocumentTagDto.tag_id;
+    documentTag.added_by = user;
     documentTag.document = document;
     documentTag.tag = tag;
     documentTag.added_by = user;
@@ -109,7 +190,7 @@ export class DocumentTagService {
     // 6. Ghi log hành động
     await this.documentAuditLogService.create({
       document_id: createDocumentTagDto.document_id,
-      user_id: createDocumentTagDto.added_by,
+      user_id: userId,
       action_type: 'ADD_TAG',
       action_details: {
         tag_id: createDocumentTagDto.tag_id,
@@ -133,5 +214,55 @@ export class DocumentTagService {
     }
 
     return result;
+  }
+
+  async remove(
+    documentId: string,
+    tagId: string,
+    userId: string,
+  ): Promise<void> {
+    // Kiểm tra sự tồn tại của document tag
+    const documentTag = await this.documentTagRepository.findOne({
+      where: {
+        document_id: documentId,
+        tag_id: tagId,
+      },
+      relations: ['document', 'tag', 'added_by', 'document.createdBy'],
+    });
+
+    if (!documentTag) {
+      throw new NotFoundException('Document tag không tồn tại');
+    }
+
+    // Kiểm tra quyền: chỉ người thêm tag hoặc người tạo tài liệu mới có thể xóa
+    if (
+      documentTag.added_by.id !== userId &&
+      documentTag.document.createdBy.id !== userId
+    ) {
+      throw new ForbiddenException('Bạn không có quyền xóa tag này');
+    }
+
+    // Ghi log hành động
+    await this.documentAuditLogService.create({
+      document_id: documentId,
+      user_id: userId,
+      action_type: 'REMOVE_TAG',
+      action_details: {
+        tag_id: tagId,
+        tag_name: documentTag.tag.name,
+      },
+      ip_address: '127.0.0.1',
+      user_agent: 'Mozilla/5.0',
+    });
+
+    // Xóa document tag
+    await this.documentTagRepository.remove(documentTag);
+  }
+
+  async findByDocument(documentId: string): Promise<DocumentTag[]> {
+    return this.documentTagRepository.find({
+      where: { document_id: documentId },
+      relations: ['tag', 'added_by'],
+    });
   }
 }

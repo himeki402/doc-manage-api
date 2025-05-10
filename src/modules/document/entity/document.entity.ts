@@ -18,7 +18,6 @@ import { DocumentPermission } from './documentPermission.entity';
 import { DocumentAuditLog } from './documentAuditLog.entity';
 import { Group } from 'src/modules/group/group.entity';
 import slugify from 'slugify';
-import { ColumnMetadata } from 'typeorm/metadata/ColumnMetadata';
 
 @Entity('documents')
 export class Document extends BaseEntity {

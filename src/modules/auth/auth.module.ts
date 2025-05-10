@@ -12,7 +12,7 @@ import { DocumentModule } from '../document/document.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Document } from '../document/entity/document.entity';
 import { DocumentPermission } from '../document/entity/documentPermission.entity';
-import { GroupMember } from '../group/groupMember';
+import { GroupMember } from '../group/groupMember.entity';
 import { RolesGuard } from './guard/roles.guard';
 
 @Module({

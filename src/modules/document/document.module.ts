@@ -9,7 +9,7 @@ import { Group } from '../group/group.entity';
 import { DocumentAuditLog } from './entity/documentAuditLog.entity';
 import { DocumentPermission } from './entity/documentPermission.entity';
 import { DocumentVersion } from './entity/documentVersion.entity';
-import { GroupMember } from '../group/groupMember';
+import { GroupMember } from '../group/groupMember.entity';
 import { AwsS3Service } from './service/aws-s3.service';
 import { Category } from '../category/category.entity';
 import { CloudinaryService } from './service/cloudinary.service';

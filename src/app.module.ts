@@ -11,7 +11,6 @@ import { CategoryModule } from './modules/category/category.module';
 import { GroupModule } from './modules/group/group.module';
 import { CommentModule } from './modules/comment/comment.module';
 import { TagModule } from './modules/tag/tag.module';
-import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { HomeModule } from './modules/home/home.module';
 import { RolesGuard } from './modules/auth/guard/roles.guard';
 
@@ -26,7 +25,6 @@ import { RolesGuard } from './modules/auth/guard/roles.guard';
     GroupModule,
     CommentModule,
     TagModule,
-    DashboardModule,
     HomeModule,
   ],
   controllers: [AppController],

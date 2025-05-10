@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Document } from 'src/modules/document/entity/document.entity';
 import { DocumentPermission } from 'src/modules/document/entity/documentPermission.entity';
-import { GroupMember } from 'src/modules/group/groupMember';
+import { GroupMember } from 'src/modules/group/groupMember.entity';
 import { DocumentType } from 'src/common/enum/documentType.enum';
 import { EntityType } from 'src/common/enum/entityType.enum';
 import { GroupRole } from 'src/common/enum/groupRole.enum';

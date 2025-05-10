@@ -19,7 +19,7 @@ import { DocumentType } from 'src/common/enum/documentType.enum';
 import { DocumentPermission } from '../entity/documentPermission.entity';
 import { validate } from 'class-validator';
 import { Group } from 'src/modules/group/group.entity';
-import { GroupMember } from 'src/modules/group/groupMember';
+import { GroupMember } from 'src/modules/group/groupMember.entity';
 import { EntityType } from 'src/common/enum/entityType.enum';
 import { PermissionType } from 'src/common/enum/permissionType.enum';
 import { AwsS3Service } from './aws-s3.service';
@@ -183,7 +183,7 @@ export class DocumentService {
             'Content-Type': 'multipart/form-data',
           },
         },
-      );  
+      );
 
       // Trả về nội dung đã trích xuất
       return extractResponse.data.text || '';
