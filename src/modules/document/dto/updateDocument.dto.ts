@@ -40,4 +40,8 @@ export class UpdateDocumentDto {
   @IsString()
   @IsOptional()
   groupId?: string;
+
+  @IsString()
+  @IsOptional()
+  tagIds?: string[];
 }

@@ -15,6 +15,8 @@ import { Category } from '../category/category.entity';
 import { CloudinaryService } from './service/cloudinary.service';
 import { ThumbnailService } from './service/thumbnail.service';
 import { HttpModule } from '@nestjs/axios';
+import { Tag } from '../tag/tag.entity';
+import { DocumentTag } from '../tag/document-tags.entity';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { HttpModule } from '@nestjs/axios';
       DocumentPermission,
       DocumentVersion,
       Category,
+      Tag,
+      DocumentTag,
     ]),
     HttpModule,
     MulterModule.register({

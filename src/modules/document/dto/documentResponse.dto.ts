@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Expose } from 'class-transformer';
 import { BaseDto } from 'src/common/dto/base.dto';
 import { DocumentType } from 'src/common/enum/documentType.enum';
+import { Tag } from 'src/modules/tag/tag.entity';
 
 export class DocumentResponseDto extends BaseDto {
   @ApiProperty()
@@ -95,6 +96,10 @@ export class DocumentResponseDto extends BaseDto {
 
   @Expose()
   @ApiProperty()
+  updated_at: Date;
+
+  @Expose()
+  @ApiProperty()
   slug: string;
 
   @Expose()
@@ -102,5 +107,10 @@ export class DocumentResponseDto extends BaseDto {
   categorySlug?: string;
 
   @Expose()
-  thumbnailUrl: string;
+  @ApiProperty()
+  tags?: Tag[];
+
+  @Expose()
+  @ApiPropertyOptional()
+  thumbnailUrl?: string;
 }

@@ -26,6 +26,8 @@ import { AwsS3Service } from './aws-s3.service';
 import { Category } from 'src/modules/category/category.entity';
 import { ThumbnailService } from './thumbnail.service';
 import { HttpService } from '@nestjs/axios';
+import { DocumentTag } from 'src/modules/tag/document-tags.entity';
+import { Tag } from 'src/modules/tag/tag.entity';
 
 @Injectable()
 export class DocumentService {
@@ -40,6 +42,10 @@ export class DocumentService {
     private readonly groupRepository: Repository<Group>,
     @InjectRepository(GroupMember)
     private readonly groupMemberRepository: Repository<GroupMember>,
+    @InjectRepository(DocumentTag)
+    private readonly documentTagRepository: Repository<DocumentTag>,
+    @InjectRepository(Tag)
+    private readonly tagRepository: Repository<Tag>,
     private readonly awsS3Service: AwsS3Service,
     private readonly thumbnailService: ThumbnailService,
     @InjectRepository(Category)
@@ -289,7 +295,13 @@ export class DocumentService {
     // Tìm document cần cập nhật
     const document = await this.documentRepository.findOne({
       where: { id },
-      relations: ['createdBy', 'group', 'category'],
+      relations: [
+        'createdBy',
+        'group',
+        'category',
+        'documentTags',
+        'documentTags.tag',
+      ],
     });
 
     if (!document) {
@@ -313,7 +325,7 @@ export class DocumentService {
       }
     }
 
-    // Kiểm tra và cập nhật category nếu có
+    // Cập nhật category
     if (
       updateData.categoryId &&
       updateData.categoryId !== document.category?.id
@@ -329,7 +341,7 @@ export class DocumentService {
       document.category = category;
     }
 
-    // Kiểm tra và cập nhật group nếu có
+    // Cập nhật group
     if (updateData.accessType === DocumentType.GROUP && updateData.groupId) {
       if (document.group?.id !== updateData.groupId) {
         const group = await this.groupRepository.findOne({
@@ -354,7 +366,6 @@ export class DocumentService {
       updateData.accessType &&
       updateData.accessType !== DocumentType.GROUP
     ) {
-      // Nếu chuyển từ GROUP sang loại khác, xóa liên kết với group
       document.group = undefined;
     }
 
@@ -368,15 +379,35 @@ export class DocumentService {
     // Lưu document đã cập nhật
     const updatedDocument = await this.documentRepository.save(document);
 
+    // Load lại document với đầy đủ quan hệ
+    const completeDocument = await this.documentRepository.findOne({
+      where: { id: updatedDocument.id },
+      relations: [
+        'createdBy',
+        'group',
+        'category',
+        'documentTags',
+        'documentTags.tag',
+      ],
+    });
+
+    if (!completeDocument) {
+      throw new NotFoundException('Updated document not found');
+    }
+
     // Trả về document đã cập nhật
     return plainToInstance(
       DocumentResponseDto,
       {
-        ...updatedDocument,
-        createdById: updatedDocument.createdBy.id,
-        createdByName: updatedDocument.createdBy.name,
-        groupName: updatedDocument.group?.name,
-        categoryName: updatedDocument.category?.name,
+        ...completeDocument,
+        createdById: completeDocument.createdBy.id,
+        createdByName: completeDocument.createdBy.name,
+        groupName: completeDocument.group?.name,
+        categoryName: completeDocument.category?.name,
+        tags: completeDocument.documentTags?.map((dt) => ({
+          id: dt.tag.id,
+          name: dt.tag.name,
+        })),
       },
       {
         excludeExtraneousValues: true,
