@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TagController } from './tag.controller';
 import { DocumentTagService, TagService } from './tag.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -11,6 +11,7 @@ import { DocumentAuditLog } from '../document/entity/documentAuditLog.entity';
 import { GroupMember } from '../group/groupMember.entity';
 import { DocumentPermission } from '../document/entity/documentPermission.entity';
 import { DocumentTagController } from './document-tag.controller';
+import { DocumentModule } from '../document/document.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { DocumentTagController } from './document-tag.controller';
       GroupMember,
       DocumentPermission,
     ]),
+    forwardRef(() => DocumentModule),
   ],
   controllers: [TagController, DocumentTagController],
   providers: [TagService, DocumentTagService, DocumentAuditLogService],

@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   ForbiddenException,
+  forwardRef,
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -28,6 +30,8 @@ import { ThumbnailService } from './thumbnail.service';
 import { HttpService } from '@nestjs/axios';
 import { DocumentTag } from 'src/modules/tag/document-tags.entity';
 import { Tag } from 'src/modules/tag/tag.entity';
+import { DocumentTagService } from 'src/modules/tag/tag.service';
+import { DocumentAuditLogService } from './documentAuditLog.service';
 
 @Injectable()
 export class DocumentService {
@@ -50,6 +54,8 @@ export class DocumentService {
     private readonly thumbnailService: ThumbnailService,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
+    @Inject(forwardRef(() => DocumentTagService))
+    private documentTagService: DocumentTagService,
     private httpService: HttpService,
   ) {}
 
@@ -113,6 +119,20 @@ export class DocumentService {
         );
       }
     }
+
+    let tags: Tag[] = [];
+    if (
+      dtoInstance.tagIds &&
+      Array.isArray(dtoInstance.tagIds) &&
+      dtoInstance.tagIds.length > 0
+    ) {
+      tags = await this.tagRepository.find({
+        where: { id: In(dtoInstance.tagIds) },
+      });
+      if (tags.length !== dtoInstance.tagIds.length) {
+        throw new NotFoundException('One or more tags not found');
+      }
+    }
     const document = this.documentRepository.create({
       title: dtoInstance.title,
       description: dtoInstance.description,
@@ -132,6 +152,14 @@ export class DocumentService {
 
     const savedDocument = await this.documentRepository.save(document);
 
+    if (tags.length > 0) {
+      const documentTags = tags.map((tag) => ({
+        document: { id: savedDocument.id },
+        tag: { id: tag.id },
+      }));
+      await this.documentTagRepository.save(documentTags);
+    }
+
     const permission = this.documentPermissionRepository.create({
       document_id: savedDocument.id,
       entity_type: EntityType.USER,
@@ -145,12 +173,25 @@ export class DocumentService {
     // Load complete document with relations
     const completeDocument = await this.documentRepository.findOne({
       where: { id: savedDocument.id },
-      relations: ['createdBy', 'group', 'category'],
+      relations: [
+        'createdBy',
+        'group',
+        'category',
+        'documentTags',
+        'documentTags.tag',
+      ],
     });
 
     if (!completeDocument) {
       throw new NotFoundException('Created document not found');
     }
+
+    const tagsResponse = completeDocument.documentTags
+      ? completeDocument.documentTags.map((dt) => ({
+          id: dt.tag.id,
+          name: dt.tag.name,
+        }))
+      : [];
 
     return plainToInstance(
       DocumentResponseDto,
@@ -160,6 +201,7 @@ export class DocumentService {
         createdByName: completeDocument.createdBy.name,
         groupName: completeDocument.group?.name,
         categoryName: completeDocument.category?.name,
+        tags: tagsResponse,
       },
       {
         excludeExtraneousValues: true,
@@ -292,6 +334,11 @@ export class DocumentService {
     userId: string,
     updateData: UpdateDocumentDto,
   ): Promise<DocumentResponseDto> {
+    // Validate document ID
+    if (!id) {
+      throw new BadRequestException('Document ID is required');
+    }
+
     // Tìm document cần cập nhật
     const document = await this.documentRepository.findOne({
       where: { id },
@@ -305,7 +352,7 @@ export class DocumentService {
     });
 
     if (!document) {
-      throw new NotFoundException('Document not found');
+      throw new NotFoundException(`Document with ID '${id}' not found`);
     }
 
     // Kiểm tra quyền cập nhật
@@ -369,12 +416,61 @@ export class DocumentService {
       document.group = undefined;
     }
 
+    // Cập nhật tags
+    if (updateData.tagIds && updateData.tagIds.length > 0) {
+      try {
+        const currentTagIds =
+          document.documentTags?.map((dt) => dt.tag.id) || [];
+        const tagsToAdd = updateData.tagIds.filter(
+          (id) => !currentTagIds.includes(id),
+        );
+        const tagsToRemove = currentTagIds.filter(
+          (id) => !(updateData.tagIds ?? []).includes(id),
+        );
+
+        // Xóa các tag bị bỏ chọn
+        for (const tagId of tagsToRemove) {
+          await this.documentTagService.remove(id, tagId, userId);
+        }
+
+        // Thêm các tag mới
+        for (const tagId of tagsToAdd) {
+          if (!id) {
+            throw new BadRequestException(
+              'Document ID is required for adding tags',
+            );
+          }
+          await this.documentTagService.create(
+            {
+              document_id: id,
+              tag_id: tagId,
+            },
+            userId,
+          );
+        }
+      } catch (error: any) {
+        console.error('Failed to update document tags:', error);
+        throw new BadRequestException(
+          error.message || 'Failed to update document tags',
+        );
+      }
+    } else if (updateData.tagIds && updateData.tagIds.length === 0) {
+      // Nếu tagIds là mảng rỗng, xóa tất cả tag hiện tại
+      const currentTagIds = document.documentTags?.map((dt) => dt.tag.id) || [];
+      for (const tagId of currentTagIds) {
+        await this.documentTagService.remove(id, tagId, userId);
+      }
+    }
+
     // Cập nhật các trường cơ bản
     if (updateData.title) document.title = updateData.title;
     if (updateData.description) document.description = updateData.description;
     if (updateData.content) document.content = updateData.content;
     if (updateData.metadata) document.metadata = updateData.metadata;
     if (updateData.accessType) document.accessType = updateData.accessType;
+
+    // Làm sạch quan hệ documentTags để tránh lỗi TypeORM
+    document.documentTags = undefined;
 
     // Lưu document đã cập nhật
     const updatedDocument = await this.documentRepository.save(document);
@@ -453,7 +549,7 @@ export class DocumentService {
    * @returns Danh sách Document với đầy đủ thông tin
    */
   async getAllDocuments(query: GetDocumentsDto) {
-    const { page = 1, limit = 10, search, categoryId, accessType } = query;
+    const { page = 1, limit = 10, search, categoryId, accessType, tag } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.documentRepository
@@ -513,6 +609,11 @@ export class DocumentService {
       queryBuilder.andWhere('document.accessType = :accessType', {
         accessType,
       });
+    }
+
+    // Lọc theo tag nếu có
+    if (tag) {
+      queryBuilder.andWhere('tag.id = :tag', { tag });
     }
 
     // Sắp xếp theo thời gian tạo mới nhất
@@ -618,7 +719,8 @@ export class DocumentService {
         'category.slug',
         'createdBy.id',
         'createdBy.name',
-      ]);
+      ])
+      .where('document.accessType = :accessType', { accessType: 'PUBLIC' });
 
     if (categoryId && slug) {
       queryBuilder.where(

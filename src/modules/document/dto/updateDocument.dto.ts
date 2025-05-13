@@ -1,6 +1,6 @@
 // update-document.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsEnum, IsOptional, IsObject } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsObject, IsArray } from 'class-validator';
 import { DocumentType } from 'src/common/enum/documentType.enum';
 export class UpdateDocumentDto {
   @ApiProperty({ description: 'Title of the document', maxLength: 255 })
@@ -41,7 +41,8 @@ export class UpdateDocumentDto {
   @IsOptional()
   groupId?: string;
 
-  @IsString()
+  @IsArray()
+  @IsString({ each: true })
   @IsOptional()
   tagIds?: string[];
 }

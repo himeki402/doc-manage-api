@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { DocumentController } from './document.controller';
 import { DocumentService } from './service/document.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -17,6 +17,9 @@ import { ThumbnailService } from './service/thumbnail.service';
 import { HttpModule } from '@nestjs/axios';
 import { Tag } from '../tag/tag.entity';
 import { DocumentTag } from '../tag/document-tags.entity';
+import { DocumentTagService } from '../tag/tag.service';
+import { DocumentAuditLogService } from './service/documentAuditLog.service';
+import { TagModule } from '../tag/tag.module';
 
 @Module({
   imports: [
@@ -32,6 +35,7 @@ import { DocumentTag } from '../tag/document-tags.entity';
       Tag,
       DocumentTag,
     ]),
+    forwardRef(() => TagModule),
     HttpModule,
     MulterModule.register({
       limits: {
@@ -56,6 +60,8 @@ import { DocumentTag } from '../tag/document-tags.entity';
     DocumentService,
     AwsS3Service,
     CloudinaryService,
+    DocumentTagService,
+    DocumentAuditLogService,
     ThumbnailService,
   ],
   exports: [TypeOrmModule],

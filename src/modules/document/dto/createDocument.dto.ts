@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsObject, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsEnum,
+  IsObject,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { BaseDto } from 'src/common/dto/base.dto';
 import { DocumentType } from 'src/common/enum/documentType.enum';
 
@@ -40,4 +46,9 @@ export class CreateDocumentDto extends BaseDto {
   @IsString()
   @IsOptional()
   groupId?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  tagIds?: string[];
 }

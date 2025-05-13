@@ -45,7 +45,7 @@ export class TagService {
   }> {
     const {
       page = 1,
-      limit = 10,
+      limit = 30,
       search,
       sortBy = 'name',
       sortOrder = 'ASC',
@@ -137,7 +137,7 @@ export class DocumentTagService {
     if (errors.length > 0) {
       throw new BadRequestException('Validation failed', errors.toString());
     }
-
+    console.log('Creating DocumentTag with document_id:', createDocumentTagDto.document_id);
     const document = await this.documentRepository.findOne({
       where: { id: createDocumentTagDto.document_id },
     });

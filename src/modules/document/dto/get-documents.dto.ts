@@ -52,4 +52,9 @@ export class GetDocumentsDto {
   @IsString()
   @IsOptional()
   slug?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  tag?: string;
 }
