@@ -11,6 +11,7 @@ import {
   Query,
   Put,
   Delete,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentService } from './service/document.service';
@@ -33,6 +34,7 @@ import {
   ApiQuery,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { validate as isUUID } from 'uuid';
 
 @ApiTags('documents')
 @ApiBearerAuth()
@@ -183,8 +185,7 @@ export class DocumentController {
     );
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @SystemRoles(SystemRole.ADMIN, SystemRole.USER, SystemRole.GUEST)
+  @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Lấy thông tin chi tiết của một tài liệu' })
   @ApiParam({ name: 'id', description: 'ID của tài liệu' })
@@ -193,9 +194,13 @@ export class DocumentController {
     description: 'Thông tin tài liệu đã được lấy thành công',
   })
   @ApiResponse({ status: 404, description: 'Không tìm thấy tài liệu' })
-  @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
-  async findOne(@Param('id') id: string, @Req() request: RequestWithUser) {
-    const data = await this.documentService.findOne(id, request.user.id);
+  async findOne(@Param('id') id: string) {
+    if (!isUUID(id)) {
+      throw new BadRequestException(
+        'Invalid document ID: must be a valid UUID',
+      );
+    }
+    const data = await this.documentService.findOne(id);
     return ResponseData.success(data, 'Document retrieved successfully');
   }
 

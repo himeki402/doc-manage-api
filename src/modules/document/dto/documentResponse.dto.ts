@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Expose } from 'class-transformer';
 import { BaseDto } from 'src/common/dto/base.dto';
 import { DocumentType } from 'src/common/enum/documentType.enum';
+import { DocumentTag } from 'src/modules/tag/document-tags.entity';
 import { Tag } from 'src/modules/tag/tag.entity';
 
 export class DocumentResponseDto extends BaseDto {
@@ -44,6 +45,10 @@ export class DocumentResponseDto extends BaseDto {
   @Expose()
   @ApiProperty()
   rating: number;
+
+  @Expose()
+  @ApiPropertyOptional()
+  pageCount?: number;
 
   @Expose()
   @ApiPropertyOptional()
@@ -108,7 +113,7 @@ export class DocumentResponseDto extends BaseDto {
 
   @Expose()
   @ApiProperty()
-  tags?: Tag[];
+  tags?: DocumentTag[];
 
   @Expose()
   @ApiPropertyOptional()

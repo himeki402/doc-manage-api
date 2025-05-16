@@ -31,7 +31,7 @@ import { HttpService } from '@nestjs/axios';
 import { DocumentTag } from 'src/modules/tag/document-tags.entity';
 import { Tag } from 'src/modules/tag/tag.entity';
 import { DocumentTagService } from 'src/modules/tag/tag.service';
-import { DocumentAuditLogService } from './documentAuditLog.service';
+import { CloudinaryService } from './cloudinary.service';
 
 @Injectable()
 export class DocumentService {
@@ -52,6 +52,7 @@ export class DocumentService {
     private readonly tagRepository: Repository<Tag>,
     private readonly awsS3Service: AwsS3Service,
     private readonly thumbnailService: ThumbnailService,
+    private readonly cloundinaryService: CloudinaryService,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
     @Inject(forwardRef(() => DocumentTagService))
@@ -76,14 +77,24 @@ export class DocumentService {
     let thumbnailInfo: { thumbnailUrl: string; thumbnailKey?: string } | null =
       null;
     let extractedContent = '';
+    let pageCount = 0;
     if (file) {
       fileInfo = await this.awsS3Service.uploadFile(file);
       thumbnailInfo = await this.thumbnailService.generateThumbnail(file);
 
       if (file.mimetype === 'application/pdf' && fileInfo?.url) {
-        extractedContent = await this.extractPdfContentFromService(
-          fileInfo.url,
-        );
+        try {
+          const extractionResult = await this.extractPdfContentFromService(
+            fileInfo.url,
+          );
+          extractedContent = extractionResult.text;
+          pageCount = extractionResult.pageCount;
+        } catch (error) {
+          throw new HttpException(
+            'Failed to extract PDF content: ' + (error as Error).message,
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
+        }
       }
     }
 
@@ -142,12 +153,14 @@ export class DocumentService {
       filePath: fileInfo?.key,
       fileUrl: fileInfo?.url,
       thumbnailUrl: thumbnailInfo?.thumbnailUrl,
+      thumbnailKey: thumbnailInfo?.thumbnailKey,
       mimeType: file?.mimetype,
       accessType: dtoInstance.accessType || DocumentType.PRIVATE,
       createdBy: { id: userId } as User,
       category: category || undefined,
       group: group || undefined,
       metadata: dtoInstance.metadata,
+      pageCount: pageCount || 0,
     } as Partial<Document>);
 
     const savedDocument = await this.documentRepository.save(document);
@@ -209,47 +222,56 @@ export class DocumentService {
     );
   }
 
-  private async extractPdfContentFromService(fileUrl: string): Promise<string> {
+  private async extractPdfContentFromService(
+    fileUrl: string,
+  ): Promise<{ text: string; pageCount: number }> {
     try {
-      // Tải file từ URL
+      const microserviceUrl =
+        process.env.PDF_EXTRACT_SERVICE_URL ||
+        'http://localhost:8000/extract-text';
       const response = await this.httpService.axiosRef.get(fileUrl, {
         responseType: 'arraybuffer',
       });
 
-      // Chuẩn bị file để gửi đến microservice
       const fileBuffer = Buffer.from(response.data);
       const formData = new FormData();
       const blob = new Blob([fileBuffer], { type: 'application/pdf' });
       formData.append('file', blob, 'document.pdf');
 
-      // Gọi đến microservice để trích xuất nội dung
       const extractResponse = await this.httpService.axiosRef.post(
-        'http://localhost:8000/extract-text',
+        microserviceUrl,
         formData,
         {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 10000,
         },
       );
 
-      // Trả về nội dung đã trích xuất
-      return extractResponse.data.text || '';
+      return {
+        text: extractResponse.data.text || '',
+        pageCount: extractResponse.data.pageCount || 0,
+      };
     } catch (error) {
       console.error('Lỗi khi trích xuất nội dung PDF:', error);
-      return '';
+      throw new HttpException(
+        'Failed to extract PDF content from service: ' +
+          (error as Error).message,
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
     }
   }
 
-  async getDocumentsPublic(query) {
-    const { page = 1, limit = 10, search } = query;
+  async getDocumentsPublic(query: GetDocumentsDto) {
+    const { page = 1, limit = 10, search, categoryId, tag } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.documentRepository
       .createQueryBuilder('document')
       .leftJoinAndSelect('document.createdBy', 'createdBy')
       .leftJoinAndSelect('document.category', 'category')
-      .leftJoinAndSelect('document.documentTags', 'documentTag')
+      .leftJoinAndSelect('document.group', 'group')
+      .leftJoinAndSelect('document.documentTags', 'documentTags')
+      .leftJoinAndSelect('documentTags.tag', 'tag')
       .select([
         'document.id',
         'document.title',
@@ -259,8 +281,15 @@ export class DocumentService {
         'document.created_at',
         'document.likeCount',
         'document.view',
+        'document.pageCount',
         'document.rating',
         'document.ratingCount',
+        'documentTags.document_id',
+        'documentTags.tag_id',
+        'category.id',
+        'category.name',
+        'tag.id',
+        'tag.name',
         'createdBy.name',
         'document.slug',
       ])
@@ -274,12 +303,44 @@ export class DocumentService {
       });
     }
 
+    if (categoryId) {
+      queryBuilder.andWhere('category.id = :categoryId', { categoryId });
+    }
+
+    if (tag) {
+      queryBuilder.andWhere('tag.id = :tag', { tag });
+    }
+
     const [documents, total] = await queryBuilder
       .skip(skip)
       .take(limit)
       .getManyAndCount();
 
-    const data = documents.map((doc) => this.mapToResponseDto(doc));
+    const data = documents.map((doc) => {
+      const tags = doc.documentTags
+        ? doc.documentTags.map((dt) => ({
+            id: dt.tag.id,
+            name: dt.tag.name,
+          }))
+        : [];
+      return plainToInstance(
+        DocumentResponseDto,
+        {
+          ...doc,
+          createdById: doc.createdBy?.id,
+          createdByName: doc.createdBy?.name,
+          categoryId: doc.category?.id,
+          categoryName: doc.category?.name,
+          categorySlug: doc.category?.slug,
+          groupId: doc.group?.id,
+          groupName: doc.group?.name,
+          tags: tags,
+        },
+        {
+          excludeExtraneousValues: true,
+        },
+      );
+    });
 
     return {
       data,
@@ -292,41 +353,74 @@ export class DocumentService {
     };
   }
 
-  async findOne(id: string, userId: string): Promise<DocumentResponseDto> {
-    const document = await this.documentRepository.findOne({
-      where: { id },
-      relations: ['createdBy', 'group'],
-    });
+  async findOne(id: string): Promise<DocumentResponseDto> {
+    const document = await this.documentRepository
+      .createQueryBuilder('document')
+      .leftJoinAndSelect('document.createdBy', 'createdBy')
+      .leftJoinAndSelect('document.category', 'category')
+      .leftJoinAndSelect('document.group', 'group')
+      .leftJoinAndSelect('document.documentTags', 'documentTags')
+      .leftJoinAndSelect('documentTags.tag', 'tag')
+      .select([
+        'document.id',
+        'document.title',
+        'document.description',
+        'document.accessType',
+        'document.created_at',
+        'document.thumbnailUrl',
+        'document.rating',
+        'document.ratingCount',
+        'document.view',
+        'document.mimeType',
+        'document.fileUrl',
+        'document.slug',
+        'document.pageCount',
+        'documentTags.document_id',
+        'documentTags.tag_id',
+        'tag.id',
+        'tag.name',
+        'createdBy.id',
+        'createdBy.name',
+        'category.id',
+        'category.name',
+        'category.slug',
+      ])
+      .where('document.id = :id', { id })
+      .getOne();
 
     if (!document) {
       throw new HttpException('Document not found', HttpStatus.NOT_FOUND);
     }
 
-    // Kiểm tra quyền truy cập
-    if (document.accessType === DocumentType.PRIVATE) {
-      if (document.createdBy.id !== userId) {
-        const permission = await this.documentPermissionRepository.findOne({
-          where: {
-            document_id: id,
-            entity_type: EntityType.USER,
-            entity_id: userId,
-          },
-        });
-        if (!permission) {
-          throw new HttpException('Access denied', HttpStatus.FORBIDDEN);
-        }
-      }
-    } else if (document.accessType === DocumentType.GROUP) {
-      if (!document.group) {
-        throw new HttpException(
-          'Document not in any group',
-          HttpStatus.FORBIDDEN,
-        );
-      }
-      // TODO: Kiểm tra quyền trong nhóm
-    }
+    await this.documentRepository
+      .createQueryBuilder()
+      .update(Document)
+      .set({ view: () => 'view + 1' })
+      .where('id = :id', { id })
+      .execute();
 
-    return this.mapToResponseDto(document);
+    const tags = document.documentTags
+      ? document.documentTags.map((dt) => ({
+          id: dt.tag.id,
+          name: dt.tag.name,
+        }))
+      : [];
+
+    return plainToInstance(
+      DocumentResponseDto,
+      {
+        ...document,
+        createdById: document.createdBy.id,
+        createdByName: document.createdBy.name,
+        groupName: document.group?.name,
+        categoryName: document.category?.name,
+        categoryId: document.category?.id,
+        tags: tags,
+      },
+      {
+        excludeExtraneousValues: true,
+      },
+    );
   }
 
   async update(
@@ -513,19 +607,52 @@ export class DocumentService {
 
   async remove(id: string, userId: string): Promise<void> {
     const document = await this.documentRepository.findOne({
-      where: { id, createdBy: { id: userId } },
+      where: { id },
+      relations: ['createdBy', 'group', 'documentTags'],
     });
 
     if (!document) {
       throw new HttpException('Document not found', HttpStatus.NOT_FOUND);
     }
 
-    // Delete file from S3 if exists
+    if (document.createdBy.id !== userId) {
+      const permission = await this.documentPermissionRepository.findOne({
+        where: {
+          document_id: id,
+          entity_id: userId,
+          permission_type: PermissionType.WRITE,
+        },
+      });
+      if (!permission) {
+        if (document.accessType === DocumentType.GROUP) {
+          const groupMember = await this.groupMemberRepository.findOne({
+            where: { group_id: document.group?.id, user_id: userId },
+          });
+          if (!groupMember) {
+            throw new ForbiddenException(
+              'You do not have permission to delete this document',
+            );
+          }
+        } else {
+          throw new ForbiddenException(
+            'You do not have permission to delete this document',
+          );
+        }
+      }
+    }
+
+    // Xóa file và thumbnail từ S3
     if (document.filePath) {
       await this.awsS3Service.deleteFile(document.filePath);
     }
+    if (document.thumbnailKey) {
+      await this.cloundinaryService.deleteImage(document.thumbnailKey);
+    }
 
-    // Delete database record
+    // Xóa các documentTags liên quan
+    await this.documentTagRepository.delete({ document_id: id });
+
+    // Xóa document
     await this.documentRepository.remove(document);
   }
 
@@ -577,6 +704,7 @@ export class DocumentService {
         'document.rating',
         'document.ratingCount',
         'document.slug',
+        'document.pageCount',
         'createdBy.id',
         'createdBy.name',
         'createdBy.email',
@@ -673,6 +801,8 @@ export class DocumentService {
     const { page = 1, limit = 10, categoryId, slug } = query;
     const skip = (page - 1) * limit;
     let categoryExists;
+
+    // Kiểm tra category
     if (categoryId) {
       categoryExists = await this.categoryRepository.findOne({
         where: { id: categoryId },
@@ -698,10 +828,13 @@ export class DocumentService {
     // Lấy danh sách tất cả các category con (bao gồm cả category hiện tại)
     const allCategoryIds = await this.getAllChildCategoryIds(categoryExists.id);
 
+    // Tạo query builder
     const queryBuilder = this.documentRepository
       .createQueryBuilder('document')
       .leftJoinAndSelect('document.category', 'category')
       .leftJoinAndSelect('document.createdBy', 'createdBy')
+      .leftJoinAndSelect('document.documentTags', 'documentTags')
+      .leftJoinAndSelect('documentTags.tag', 'tag')
       .select([
         'document.id',
         'document.title',
@@ -714,6 +847,12 @@ export class DocumentService {
         'document.ratingCount',
         'document.view',
         'document.mimeType',
+        'document.fileUrl',
+        'document.slug',
+        'documentTags.document_id',
+        'documentTags.tag_id',
+        'tag.id',
+        'tag.name',
         'category.id',
         'category.name',
         'category.slug',
@@ -722,26 +861,16 @@ export class DocumentService {
       ])
       .where('document.accessType = :accessType', { accessType: 'PUBLIC' });
 
+    // Thêm điều kiện cho category
     if (categoryId && slug) {
-      queryBuilder.where(
+      queryBuilder.andWhere(
         '(category.id IN (:...allCategoryIds) OR category.slug = :slug)',
-        {
-          allCategoryIds,
-          slug,
-        },
+        { allCategoryIds, slug },
       );
-    } else if (categoryId) {
-      queryBuilder.where('category.id IN (:...allCategoryIds)', {
+    } else if (categoryId || slug) {
+      queryBuilder.andWhere('category.id IN (:...allCategoryIds)', {
         allCategoryIds,
       });
-    } else if (slug) {
-      queryBuilder.where('category.id IN (:...allCategoryIds)', {
-        allCategoryIds,
-      });
-    } else {
-      throw new BadRequestException(
-        'Either categoryId or slug must be provided',
-      );
     }
 
     const [documents, total] = await queryBuilder
@@ -750,7 +879,6 @@ export class DocumentService {
       .getManyAndCount();
 
     const data = documents.map((doc) => {
-      // Xử lý tags
       const tags = doc.documentTags
         ? doc.documentTags.map((dt) => ({
             id: dt.tag.id,
@@ -819,6 +947,8 @@ export class DocumentService {
 
     const queryBuilder = this.documentRepository
       .createQueryBuilder('document')
+      .leftJoinAndSelect('document.documentTags', 'documentTags')
+      .leftJoinAndSelect('documentTags.tag', 'tag')
       .select([
         'document.id',
         'document.title',

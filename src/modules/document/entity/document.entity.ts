@@ -46,6 +46,9 @@ export class Document extends BaseEntity {
   thumbnailUrl?: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
+  thumbnailKey?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
   slug?: string;
 
   @Column({ type: 'text', nullable: true })
@@ -68,6 +71,9 @@ export class Document extends BaseEntity {
 
   @Column({ type: 'int', default: 0 })
   rating: number;
+
+  @Column({ type: 'int', default: 0, nullable: true })
+  pageCount: number;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, any>;
