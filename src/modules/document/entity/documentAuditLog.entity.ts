@@ -14,7 +14,7 @@ export class DocumentAuditLog {
   @PrimaryGeneratedColumn('uuid')
   log_id: string;
 
-  @ManyToOne(() => Document)
+  @ManyToOne(() => Document, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'document_id' })
   document: Document;
 

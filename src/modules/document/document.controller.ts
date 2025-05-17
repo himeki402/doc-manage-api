@@ -79,7 +79,7 @@ export class DocumentController {
   @ApiQuery({
     name: 'search',
     required: false,
-    description: 'Từ khóa tìm kiếm',
+    description: 'Từ khóa tìm kiếm theo title',
   })
   @ApiResponse({
     status: 200,
@@ -95,6 +95,15 @@ export class DocumentController {
       'Public documents retrieved successfully',
     );
   }
+
+  @Public()
+  @Get('search')
+  @ApiOperation({ summary: 'Tìm kiếm tài liệu' })
+  async searchDocuments(@Query() query: GetDocumentsDto) {
+    const result = await this.documentService.searchDocumentsPublic(query);
+    return ResponseData.success(result, 'Documents searched successfully');
+  }
+
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN)

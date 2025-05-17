@@ -32,6 +32,8 @@ import { DocumentTag } from 'src/modules/tag/document-tags.entity';
 import { Tag } from 'src/modules/tag/tag.entity';
 import { DocumentTagService } from 'src/modules/tag/tag.service';
 import { CloudinaryService } from './cloudinary.service';
+import { DocumentAuditLogService } from './documentAuditLog.service';
+import { DocumentAuditLog } from '../entity/documentAuditLog.entity';
 
 @Injectable()
 export class DocumentService {
@@ -50,6 +52,8 @@ export class DocumentService {
     private readonly documentTagRepository: Repository<DocumentTag>,
     @InjectRepository(Tag)
     private readonly tagRepository: Repository<Tag>,
+    @InjectRepository(DocumentAuditLog)
+    private readonly documentAuditLogRepository: Repository<DocumentAuditLog>,
     private readonly awsS3Service: AwsS3Service,
     private readonly thumbnailService: ThumbnailService,
     private readonly cloundinaryService: CloudinaryService,
@@ -57,6 +61,7 @@ export class DocumentService {
     private readonly categoryRepository: Repository<Category>,
     @Inject(forwardRef(() => DocumentTagService))
     private documentTagService: DocumentTagService,
+    private documentAuditLogService: DocumentAuditLogService,
     private httpService: HttpService,
   ) {}
 
@@ -165,6 +170,15 @@ export class DocumentService {
 
     const savedDocument = await this.documentRepository.save(document);
 
+    await this.documentAuditLogService.create({
+      document_id: savedDocument.id,
+      user_id: userId,
+      action_type: 'CREATE_DOCUMENT',
+      action_details: `Document ${document.id} created by user ${userId}`,
+      ip_address: '127.0.0.1',
+      user_agent: 'Mozilla/5.0',
+    });
+
     if (tags.length > 0) {
       const documentTags = tags.map((tag) => ({
         document: { id: savedDocument.id },
@@ -183,7 +197,6 @@ export class DocumentService {
     } as DocumentPermission);
     await this.documentPermissionRepository.save(permission);
 
-    // Load complete document with relations
     const completeDocument = await this.documentRepository.findOne({
       where: { id: savedDocument.id },
       relations: [
@@ -566,8 +579,17 @@ export class DocumentService {
     // Làm sạch quan hệ documentTags để tránh lỗi TypeORM
     document.documentTags = undefined;
 
-    // Lưu document đã cập nhật
     const updatedDocument = await this.documentRepository.save(document);
+
+    // Ghi lại log
+    await this.documentAuditLogService.create({
+      document_id: updatedDocument.id,
+      user_id: userId,
+      action_type: 'UPDATE_DOCUMENT',
+      action_details: `Document ${document.id} updated by user ${userId}`,
+      ip_address: '127.0.0.1',
+      user_agent: 'Mozilla/5.0',
+    });
 
     // Load lại document với đầy đủ quan hệ
     const completeDocument = await this.documentRepository.findOne({
@@ -970,6 +992,113 @@ export class DocumentService {
       .getManyAndCount();
 
     const data = documents.map((doc) => this.mapToResponseDto(doc));
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+  
+  async searchDocumentsPublic(query: GetDocumentsDto): Promise<{
+    data: DocumentResponseDto[];
+    meta: { total: number; page: number; limit: number; totalPages: number };
+  }> {
+    const { page = 1, limit = 10, search, categoryId, tag } = query;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.documentRepository
+      .createQueryBuilder('document')
+      .leftJoinAndSelect('document.createdBy', 'createdBy')
+      .leftJoinAndSelect('document.category', 'category')
+      .leftJoinAndSelect('document.group', 'group')
+      .leftJoinAndSelect('document.documentTags', 'documentTags')
+      .leftJoinAndSelect('documentTags.tag', 'tag')
+      .select([
+        'document.id',
+        'document.title',
+        'document.description',
+        'document.mimeType',
+        'document.accessType',
+        'document.created_at',
+        'document.likeCount',
+        'document.view',
+        'document.pageCount',
+        'document.rating',
+        'document.ratingCount',
+        'documentTags.document_id',
+        'documentTags.tag_id',
+        'category.id',
+        'category.name',
+        'tag.id',
+        'tag.name',
+        'createdBy.name',
+        'document.slug',
+      ])
+      .where('document.accessType = :accessType', {
+        accessType: DocumentType.PUBLIC,
+      });
+
+    if (search) {
+      const searchQuery = search
+        .trim()
+        .replace(/[!*]/g, '') // Loại bỏ ký tự đặc biệt
+        .replace(/\s+/g, ' & ') // Nối các từ bằng AND
+        .replace(/'/g, "''"); // Thoát ký tự đơn
+
+      queryBuilder.andWhere(
+        `document.document_vector @@ to_tsquery('vietnamese', vn_unaccent(:searchQuery))`,
+        { searchQuery },
+      );
+      queryBuilder.addSelect(
+        `ts_rank_cd(document.document_vector, to_tsquery('vietnamese', vn_unaccent(:searchQuery)))`,
+        'rank',
+      );
+      queryBuilder.orderBy('rank', 'DESC');
+    }
+
+    if (categoryId) {
+      queryBuilder.andWhere('category.id = :categoryId', { categoryId });
+    }
+
+    if (tag) {
+      queryBuilder.andWhere('tag.id = :tag', { tag });
+    }
+
+    const [documents, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    const data = documents.map((doc) => {
+      const tags = doc.documentTags
+        ? doc.documentTags.map((dt) => ({
+            id: dt.tag.id,
+            name: dt.tag.name,
+          }))
+        : [];
+      return plainToInstance(
+        DocumentResponseDto,
+        {
+          ...doc,
+          createdById: doc.createdBy?.id,
+          createdByName: doc.createdBy?.name,
+          categoryId: doc.category?.id,
+          categoryName: doc.category?.name,
+          categorySlug: doc.category?.slug,
+          groupId: doc.group?.id,
+          groupName: doc.group?.name,
+          tags: tags,
+        },
+        {
+          excludeExtraneousValues: true,
+        },
+      );
+    });
 
     return {
       data,
