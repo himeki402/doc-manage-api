@@ -23,6 +23,11 @@ export class GetDocumentsDto {
   @IsOptional()
   search?: string;
 
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  mimeType?: string;
+
   @ApiProperty({ required: false, default: 'createdAt' })
   @IsString()
   @IsOptional()

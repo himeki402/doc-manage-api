@@ -1003,7 +1003,7 @@ export class DocumentService {
       },
     };
   }
-  
+
   async searchDocumentsPublic(query: GetDocumentsDto): Promise<{
     data: DocumentResponseDto[];
     meta: { total: number; page: number; limit: number; totalPages: number };
@@ -1029,6 +1029,7 @@ export class DocumentService {
         'document.view',
         'document.pageCount',
         'document.rating',
+        'document.thumbnailUrl',
         'document.ratingCount',
         'documentTags.document_id',
         'documentTags.tag_id',

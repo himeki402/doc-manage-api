@@ -74,7 +74,6 @@ export class AuthController {
       if (request.res) {
         request.res.setHeader('Set-Cookie', cookie);
       }
-      console.log('User logged in:', user.role);
       return ResponseData.success(user, 'User logged in successfully');
     } catch (error) {
       return ResponseData.error(error.message, error.statusCode);
@@ -92,7 +91,6 @@ export class AuthController {
   @Get('me')
   async getMe(@Req() request: RequestWithUser) {
     try {
-      console.log('User details:', request.user.role);
       const userResponse = await this.userService.getProfile(request.user.id);
       return ResponseData.success(userResponse, 'User authenticated');
     } catch (error) {

@@ -96,14 +96,19 @@ export class DocumentController {
     );
   }
 
+
   @Public()
   @Get('search')
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Từ khóa tìm kiếm theo title',
+  })
   @ApiOperation({ summary: 'Tìm kiếm tài liệu' })
   async searchDocuments(@Query() query: GetDocumentsDto) {
     const result = await this.documentService.searchDocumentsPublic(query);
     return ResponseData.success(result, 'Documents searched successfully');
   }
-
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN)

@@ -101,7 +101,7 @@ export class UserService {
   }
 
   async createUser(userData: CreateUserDTO): Promise<UserResponseDto> {
-    const { name, username, password, email } = userData;
+    const { name, username, password } = userData;
     const existingUser = await this.userRepository.findOne({
       where: { username },
     });
@@ -113,7 +113,6 @@ export class UserService {
       name,
       username,
       status: UserStatus.PENDING,
-      email,
       password: hashedPassword,
       registrationDate: new Date(),
     });
