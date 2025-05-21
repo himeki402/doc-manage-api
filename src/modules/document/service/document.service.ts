@@ -964,34 +964,109 @@ export class DocumentService {
   }
 
   async getMyDocuments(query: GetDocumentsDto, userId: string) {
-    const { page = 1, limit = 10, search } = query;
+    const { page = 1, limit = 10, search, categoryId, accessType, tag } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.documentRepository
       .createQueryBuilder('document')
+      .leftJoinAndSelect('document.createdBy', 'createdBy')
+      .leftJoinAndSelect('document.category', 'category')
+      .leftJoinAndSelect('document.group', 'group')
       .leftJoinAndSelect('document.documentTags', 'documentTags')
       .leftJoinAndSelect('documentTags.tag', 'tag')
       .select([
         'document.id',
         'document.title',
         'document.description',
+        'document.fileName',
+        'document.fileSize',
+        'document.fileUrl',
+        'document.mimeType',
         'document.accessType',
         'document.created_at',
+        'document.updated_at',
+        'document.metadata',
+        'document.likeCount',
+        'document.view',
+        'document.rating',
+        'document.ratingCount',
+        'document.slug',
+        'document.pageCount',
+        'createdBy.id',
+        'createdBy.name',
+        'createdBy.email',
+        'category.id',
+        'category.name',
+        'category.slug',
+        'documentTags.document_id',
+        'documentTags.tag_id',
+        'tag.id',
+        'tag.name',
+        'group.id',
+        'group.name',
       ])
       .where('document.created_by = :userId', { userId });
 
+    // Áp dụng các điều kiện tìm kiếm
     if (search) {
-      queryBuilder.andWhere('document.title LIKE :search', {
-        search: `%${search}%`,
+      queryBuilder.andWhere(
+        '(document.title LIKE :search OR document.description LIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    // Lọc theo category nếu có
+    if (categoryId) {
+      queryBuilder.andWhere('category.id = :categoryId', { categoryId });
+    }
+
+    // Lọc theo accessType nếu có
+    if (accessType) {
+      queryBuilder.andWhere('document.accessType = :accessType', {
+        accessType,
       });
     }
 
+    // Lọc theo tag nếu có
+    if (tag) {
+      queryBuilder.andWhere('tag.id = :tag', { tag });
+    }
+
+    // Sắp xếp theo thời gian tạo mới nhất
+    queryBuilder.orderBy('document.created_at', 'DESC');
+
+    // Thực hiện truy vấn với phân trang
     const [documents, total] = await queryBuilder
       .skip(skip)
       .take(limit)
       .getManyAndCount();
 
-    const data = documents.map((doc) => this.mapToResponseDto(doc));
+    const data = documents.map((doc) => {
+      // Xử lý tags
+      const tags = doc.documentTags
+        ? doc.documentTags.map((dt) => ({
+            id: dt.tag.id,
+            name: dt.tag.name,
+          }))
+        : [];
+      return plainToInstance(
+        DocumentResponseDto,
+        {
+          ...doc,
+          createdById: doc.createdBy?.id,
+          createdByName: doc.createdBy?.name,
+          categoryId: doc.category?.id,
+          categoryName: doc.category?.name,
+          categorySlug: doc.category?.slug,
+          groupId: doc.group?.id,
+          groupName: doc.group?.name,
+          tags: tags,
+        },
+        {
+          excludeExtraneousValues: true,
+        },
+      );
+    });
 
     return {
       data,

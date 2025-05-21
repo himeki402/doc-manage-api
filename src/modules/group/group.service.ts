@@ -16,6 +16,7 @@ import {
   GetGroupsDto,
   UpdateGroupDto,
 } from './dto/group-dto';
+import { SystemRole } from 'src/common/enum/systemRole.enum';
 
 @Injectable()
 export class GroupService {
@@ -56,17 +57,65 @@ export class GroupService {
     return savedGroup;
   }
 
-  async findAll(query: GetGroupsDto): Promise<{
+  async findAll(
+    query: GetGroupsDto,
+    userId: string,
+  ): Promise<{
     data: Group[];
-    meta: { total: number; page: number; limit: number };
+    meta: { total: number; page: number; limit: number; totalPages: number };
   }> {
-    const groups = await this.groupRepository.find();
+    const { page = 1, limit = 10, search } = query;
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    const skip = (page - 1) * limit;
+    const queryBuilder = this.groupRepository
+      .createQueryBuilder('group')
+      .leftJoinAndSelect('group.members', 'members')
+      .leftJoinAndSelect('group.documents', 'documents')
+      .select([
+        'group.id',
+        'group.name',
+        'group.description',
+        'group.created_at',
+        'group.updated_at',
+        'members.user_id',
+        'members.group_id',
+        'members.role',
+        'members.joined_at',
+        'documents.id',
+        'documents.title',
+      ]);
+
+    if (search) {
+      queryBuilder.andWhere(
+        'group.name ILIKE :search OR group.description ILIKE :search',
+        { search: `%${search}%` },
+      );
+    }
+
+    if (user.role !== SystemRole.ADMIN) {
+      queryBuilder
+        .innerJoin('group.members', 'userMember')
+        .andWhere('userMember.user_id = :userId', { userId });
+    }
+
+    queryBuilder.skip(skip).take(limit);
+    const [groups, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
     return {
       data: groups,
       meta: {
-        total: groups.length,
-        page: 1,
-        limit: 10,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
       },
     };
   }

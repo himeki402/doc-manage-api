@@ -51,8 +51,8 @@ export class GroupController {
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
   @Get()
   @ApiOperation({ summary: 'Lấy danh sách tất cả các nhóm' })
-  async findAll(@Query() query: GetGroupsDto) {
-    const result = await this.groupService.findAll(query);
+  async findAll(@Query() query: GetGroupsDto, @Req() request: RequestWithUser) {
+    const result = await this.groupService.findAll(query, request.user.id);
     return ResponseData.paginate(
       result.data,
       result.meta.total,
