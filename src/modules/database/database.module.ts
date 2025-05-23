@@ -1,17 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { User } from '../user/user.entity';
-import { Category } from '../category/category.entity';
-import { Group } from '../group/group.entity';
-import { GroupMember } from '../group/groupMember.entity';
-import { Comment } from '../comment/comment.entity';
-import { Tag } from '../tag/tag.entity';
-import { DocumentTag } from '../tag/document-tags.entity';
-import { Document } from '../document/entity/document.entity';
-import { DocumentPermission } from '../document/entity/documentPermission.entity';
-import { DocumentVersion } from '../document/entity/documentVersion.entity';
-import { DocumentAuditLog } from '../document/entity/documentAuditLog.entity';
 
 @Module({
   imports: [
@@ -28,7 +17,7 @@ import { DocumentAuditLog } from '../document/entity/documentAuditLog.entity';
         entities: ['dist/modules/**/*.entity.js'],
         migrations: ['dist/migrations/*.js'],
         migrationsRun: true,
-        synchronize: false,
+        synchronize: true,
         migrationsTableName: 'migrations',
       }),
     }),

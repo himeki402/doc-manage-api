@@ -21,21 +21,31 @@ import { GroupRole } from 'src/common/enum/groupRole.enum';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import {
   AddMemberDto,
+  AddMultipleMembersDto,
   CreateGroupDto,
   GetGroupsDto,
+  GroupResponseDto,
   UpdateGroupDto,
 } from './dto/group-dto';
+import { GroupMember } from './groupMember.entity';
 
 @ApiTags('groups')
 @Controller('groups')
 export class GroupController {
   constructor(private readonly groupService: GroupService) {}
 
+  // --- Group Operations ---
+
+  @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
-  @Post()
   @ApiOperation({ summary: 'Tạo nhóm mới' })
-  @ApiResponse({ status: 201, description: 'Nhóm đã được tạo thành công.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Nhóm đã được tạo thành công',
+    type: GroupResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
   async create(
     @Body() createGroupDto: CreateGroupDto,
     @Req() request: RequestWithUser,
@@ -47,10 +57,15 @@ export class GroupController {
     return ResponseData.success(group, 'Nhóm đã được tạo thành công');
   }
 
+  @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
-  @Get()
   @ApiOperation({ summary: 'Lấy danh sách tất cả các nhóm' })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách nhóm đã được lấy thành công',
+    type: [GroupResponseDto],
+  })
   async findAll(@Query() query: GetGroupsDto, @Req() request: RequestWithUser) {
     const result = await this.groupService.findAll(query, request.user.id);
     return ResponseData.paginate(
@@ -62,10 +77,30 @@ export class GroupController {
     );
   }
 
+  @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @ApiOperation({ summary: 'Lấy thông tin chi tiết của một nhóm' })
+  @ApiResponse({
+    status: 200,
+    description: 'Thông tin nhóm đã được lấy thành công',
+    type: GroupResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Nhóm không tồn tại' })
+  async findOne(@Param('id') id: string, @Req() request: RequestWithUser) {
+    const group = await this.groupService.findOne(id, request.user.id);
+    return ResponseData.success(group, 'Thông tin nhóm đã được lấy thành công');
+  }
+
   @Get('my-groups')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
   @ApiOperation({ summary: 'Lấy danh sách nhóm của người dùng hiện tại' })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách nhóm của bạn đã được lấy thành công',
+    type: [GroupResponseDto],
+  })
   async getMyGroups(@Req() request: RequestWithUser) {
     const groups = await this.groupService.getGroupsByUser(request.user.id);
     return ResponseData.success(
@@ -74,19 +109,17 @@ export class GroupController {
     );
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
-  @Get(':id')
-  @ApiOperation({ summary: 'Lấy thông tin chi tiết của một nhóm' })
-  async findOne(@Param('id') id: string) {
-    const group = await this.groupService.findOne(id);
-    return ResponseData.success(group, 'Thông tin nhóm đã được lấy thành công');
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
   @ApiOperation({ summary: 'Cập nhật thông tin nhóm' })
+  @ApiResponse({
+    status: 200,
+    description: 'Thông tin nhóm đã được cập nhật thành công',
+    type: GroupResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Nhóm không tồn tại' })
   async update(
     @Param('id') id: string,
     @Body() updateGroupDto: UpdateGroupDto,
@@ -103,19 +136,35 @@ export class GroupController {
     );
   }
 
+  @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
-  @Delete(':id')
   @ApiOperation({ summary: 'Xóa nhóm' })
+  @ApiResponse({ status: 200, description: 'Nhóm đã được xóa thành công' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Nhóm không tồn tại' })
   async remove(@Param('id') id: string, @Req() request: RequestWithUser) {
     await this.groupService.remove(id, request.user.id);
     return ResponseData.success(null, 'Nhóm đã được xóa thành công');
   }
 
+  // --- Member Operations ---
+
+  @Post(':id/members')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
-  @Post(':id/members')
   @ApiOperation({ summary: 'Thêm thành viên vào nhóm' })
+  @ApiResponse({
+    status: 201,
+    description: 'Thành viên đã được thêm vào nhóm thành công',
+    type: GroupMember,
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({
+    status: 404,
+    description: 'Nhóm hoặc người dùng không tồn tại',
+  })
+  @ApiResponse({ status: 409, description: 'Người dùng đã là thành viên' })
   async addMember(
     @Param('id') id: string,
     @Body() addMemberDto: AddMemberDto,
@@ -132,10 +181,53 @@ export class GroupController {
     );
   }
 
+  @Post(':id/members/bulk')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @ApiOperation({ summary: 'Thêm nhiều thành viên vào nhóm' })
+  @ApiResponse({
+    status: 201,
+    description: 'Các thành viên đã được thêm vào nhóm thành công',
+    type: GroupResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Một số thành viên không thể được thêm',
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({
+    status: 404,
+    description: 'Nhóm hoặc người dùng không tồn tại',
+  })
+  async addMultipleMembers(
+    @Param('id') id: string,
+    @Body() addMultipleMembersDto: AddMultipleMembersDto,
+    @Req() request: RequestWithUser,
+  ) {
+    const group = await this.groupService.addMultipleMembers(
+      id,
+      addMultipleMembersDto,
+      request.user.id,
+    );
+    return ResponseData.success(
+      group,
+      'Các thành viên đã được thêm vào nhóm thành công',
+    );
+  }
+
   @Delete(':id/members/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
   @ApiOperation({ summary: 'Xóa thành viên khỏi nhóm' })
+  @ApiResponse({
+    status: 200,
+    description: 'Thành viên đã được xóa khỏi nhóm thành công',
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({
+    status: 404,
+    description: 'Thành viên hoặc nhóm không tồn tại',
+  })
   async removeMember(
     @Param('id') id: string,
     @Param('userId') userId: string,
@@ -148,10 +240,20 @@ export class GroupController {
     );
   }
 
+  @Patch(':id/members/:userId/role')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
-  @Patch(':id/members/:userId/role')
   @ApiOperation({ summary: 'Cập nhật vai trò của thành viên trong nhóm' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vai trò thành viên đã được cập nhật thành công',
+    type: GroupMember,
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({
+    status: 404,
+    description: 'Thành viên hoặc nhóm không tồn tại',
+  })
   async updateMemberRole(
     @Param('id') id: string,
     @Param('userId') userId: string,

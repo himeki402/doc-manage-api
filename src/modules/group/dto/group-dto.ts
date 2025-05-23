@@ -1,12 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Expose, Type } from 'class-transformer';
 import {
+  ArrayMinSize,
+  IsArray,
   IsEnum,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import { GroupRole } from 'src/common/enum/groupRole.enum';
 
@@ -49,20 +52,71 @@ export class UpdateGroupDto {
   description?: string;
 }
 
+export class GroupMemberDto {
+  @Expose()
+  @ApiProperty()
+  user_id?: string;
+
+  @Expose()
+  @ApiProperty()
+  name?: string;
+
+  @Expose()
+  @ApiProperty()
+  email?: string;
+
+  @Expose()
+  @ApiProperty()
+  group_id?: string;
+
+  @Expose()
+  @ApiProperty()
+  role?: string;
+
+  @Expose()
+  @ApiProperty()
+  joined_at?: Date;
+}
+
+export class GroupDocumentDto {
+  @Expose()
+  @ApiProperty()
+  id?: string;
+
+  @Expose()
+  @ApiProperty()
+  title?: string;
+
+  @Expose()
+  @ApiProperty()
+  mimeType?: string;
+
+  @Expose()
+  @ApiProperty()
+  fileSize?: number;
+
+  @Expose()
+  @ApiProperty()
+  created_at?: Date;
+
+  @Expose()
+  @ApiProperty()
+  createdByName?: string;
+}
+
 export class AddMemberDto {
   @ApiProperty({ description: 'ID của người dùng cần thêm vào nhóm' })
   @IsString()
   @IsNotEmpty()
   userId: string;
+}
 
-  @ApiProperty({
-    description: 'Vai trò của thành viên trong nhóm',
-    enum: GroupRole,
-    default: GroupRole.MEMBER,
-  })
-  @IsEnum(GroupRole)
-  @IsNotEmpty()
-  role: GroupRole;
+export class AddMultipleMembersDto {
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Phải có ít nhất 1 thành viên' })
+  @ValidateNested({ each: true })
+  @Type(() => AddMemberDto)
+  members: AddMemberDto[];
 }
 
 export class GetGroupsDto {
@@ -94,4 +148,52 @@ export class GetGroupsDto {
   @IsString()
   @IsOptional()
   sortOrder?: 'ASC' | 'DESC' = 'DESC';
+}
+
+export class GroupResponseDto {
+  @Expose()
+  @ApiProperty()
+  id: string;
+
+  @Expose()
+  @ApiProperty()
+  name: string;
+
+  @Expose()
+  @ApiProperty()
+  description?: string;
+
+  @Expose()
+  @ApiProperty()
+  created_at: Date;
+
+  @Expose()
+  @ApiProperty()
+  updated_at: Date;
+
+  @Expose()
+  @ApiProperty()
+  memberCount: number;
+
+  @Expose()
+  @ApiProperty()
+  documentCount: number;
+
+  @Expose()
+  @ApiProperty()
+  groupAdmin: {
+    id: string;
+    name: string;
+  };
+  @Expose()
+  @ApiProperty({ type: [GroupMemberDto] })
+  members: GroupMemberDto[];
+
+  @Expose()
+  @ApiProperty({ type: [GroupDocumentDto] })
+  documents: GroupDocumentDto[];
+
+  @Expose()
+  @ApiProperty()
+  isAdmin: boolean;
 }

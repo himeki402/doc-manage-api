@@ -97,14 +97,6 @@ export class DocumentResponseDto extends BaseDto {
 
   @Expose()
   @ApiProperty()
-  created_at: Date;
-
-  @Expose()
-  @ApiProperty()
-  updated_at: Date;
-
-  @Expose()
-  @ApiProperty()
   slug: string;
 
   @Expose()
@@ -118,4 +110,12 @@ export class DocumentResponseDto extends BaseDto {
   @Expose()
   @ApiPropertyOptional()
   thumbnailUrl?: string;
+
+  @Expose()
+  @ApiPropertyOptional()
+  approval_status?: string;
+
+  @Expose()
+  @ApiPropertyOptional()
+  summary?: string;
 }

@@ -46,7 +46,18 @@ export class AwsS3Service {
       if (!file || !file.buffer) {
         throw new BadRequestException('File buffer is required');
       }
-      if (!['application/pdf'].includes(file.mimetype)) {
+      const allowedMimeTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/svg+xml',
+        'image/tiff',
+        'image/bmp',
+      ];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
         throw new BadRequestException('Only PDF files are allowed');
       }
       if (file.size > 10 * 1024 * 1024) {

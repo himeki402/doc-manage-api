@@ -17,7 +17,10 @@ import { User } from '../../user/user.entity';
 import { DocumentResponseDto } from '../dto/documentResponse.dto';
 import { plainToInstance } from 'class-transformer';
 import { GetDocumentsDto } from '../dto/get-documents.dto';
-import { DocumentType } from 'src/common/enum/documentType.enum';
+import {
+  ApprovalStatus,
+  DocumentType,
+} from 'src/common/enum/documentType.enum';
 import { DocumentPermission } from '../entity/documentPermission.entity';
 import { validate } from 'class-validator';
 import { Group } from 'src/modules/group/group.entity';
@@ -34,6 +37,7 @@ import { DocumentTagService } from 'src/modules/tag/tag.service';
 import { CloudinaryService } from './cloudinary.service';
 import { DocumentAuditLogService } from './documentAuditLog.service';
 import { DocumentAuditLog } from '../entity/documentAuditLog.entity';
+import { DocumentStatsResponseDto } from '../dto/get-documents-stats.dto';
 
 @Injectable()
 export class DocumentService {
@@ -103,7 +107,6 @@ export class DocumentService {
       }
     }
 
-    // Check group if document belongs to a group
     let group: Group | null = null;
     if (dtoInstance.accessType === DocumentType.GROUP && dtoInstance.groupId) {
       group = await this.groupRepository.findOne({
@@ -161,6 +164,7 @@ export class DocumentService {
       thumbnailKey: thumbnailInfo?.thumbnailKey,
       mimeType: file?.mimetype,
       accessType: dtoInstance.accessType || DocumentType.PRIVATE,
+      approval_status: ApprovalStatus.NULL,
       createdBy: { id: userId } as User,
       category: category || undefined,
       group: group || undefined,
@@ -235,6 +239,158 @@ export class DocumentService {
     );
   }
 
+  async createImage(
+    file: Express.Multer.File,
+    createImageDto: CreateDocumentDto,
+    userId: string,
+  ): Promise<DocumentResponseDto> {
+    // Validate DTO
+    const dtoInstance = plainToInstance(CreateDocumentDto, createImageDto);
+    const errors = await validate(dtoInstance);
+    if (errors.length > 0) {
+      throw new BadRequestException('Validation failed: ' + errors.toString());
+    }
+
+    // Upload file to AWS S3 if exists
+    let fileInfo: { key: string; url: string } | null = null;
+    if (file) {
+      // Check if file is an image
+      if (!file.mimetype.startsWith('image/')) {
+        throw new BadRequestException('File must be an image');
+      }
+
+      fileInfo = await this.awsS3Service.uploadFile(file);
+    } else {
+      throw new BadRequestException('Image file is required');
+    }
+
+    let group: Group | null = null;
+    if (dtoInstance.accessType === DocumentType.GROUP && dtoInstance.groupId) {
+      group = await this.groupRepository.findOne({
+        where: { id: dtoInstance.groupId },
+        relations: ['groupAdmin'],
+      });
+      if (!group) {
+        throw new NotFoundException('Group not found');
+      }
+
+      // Check if user is a group member
+      const groupMember = await this.groupMemberRepository.findOne({
+        where: { group_id: dtoInstance.groupId, user_id: userId },
+      });
+      if (!groupMember) {
+        throw new ForbiddenException('You are not a member of this group');
+      }
+    }
+
+    // Check if category exists
+    let category: Category | null = null;
+    if (dtoInstance.categoryId) {
+      category = await this.categoryRepository.findOne({
+        where: { id: dtoInstance.categoryId },
+      });
+      if (!category) {
+        throw new NotFoundException(
+          `Category with ID '${dtoInstance.categoryId}' not found`,
+        );
+      }
+    }
+
+    let tags: Tag[] = [];
+    if (
+      dtoInstance.tagIds &&
+      Array.isArray(dtoInstance.tagIds) &&
+      dtoInstance.tagIds.length > 0
+    ) {
+      tags = await this.tagRepository.find({
+        where: { id: In(dtoInstance.tagIds) },
+      });
+      if (tags.length !== dtoInstance.tagIds.length) {
+        throw new NotFoundException('One or more tags not found');
+      }
+    }
+
+    const image = this.documentRepository.create({
+      title: dtoInstance.title,
+      description: dtoInstance.description,
+      fileName: file.originalname,
+      fileSize: file.size,
+      filePath: fileInfo.key,
+      fileUrl: fileInfo.url,
+      mimeType: file.mimetype,
+      accessType: dtoInstance.accessType || DocumentType.PRIVATE,
+      createdBy: { id: userId } as User,
+      category: category || undefined,
+      group: group || undefined,
+      metadata: dtoInstance.metadata,
+    } as Partial<Document>);
+
+    const savedImage = await this.documentRepository.save(image);
+
+    await this.documentAuditLogService.create({
+      document_id: savedImage.id,
+      user_id: userId,
+      action_type: 'CREATE_IMAGE_DOCUMENT',
+      action_details: `Image document ${image.id} created by user ${userId}`,
+      ip_address: '127.0.0.1',
+      user_agent: 'Mozilla/5.0',
+    });
+
+    if (tags.length > 0) {
+      const documentTags = tags.map((tag) => ({
+        document: { id: savedImage.id },
+        tag: { id: tag.id },
+      }));
+      await this.documentTagRepository.save(documentTags);
+    }
+
+    const permission = this.documentPermissionRepository.create({
+      document_id: savedImage.id,
+      entity_type: EntityType.USER,
+      entity_id: userId,
+      permission_type: PermissionType.WRITE,
+      granted_by: { id: userId } as User,
+      document: savedImage,
+    } as DocumentPermission);
+    await this.documentPermissionRepository.save(permission);
+
+    const completeDocument = await this.documentRepository.findOne({
+      where: { id: savedImage.id },
+      relations: [
+        'createdBy',
+        'group',
+        'category',
+        'documentTags',
+        'documentTags.tag',
+      ],
+    });
+
+    if (!completeDocument) {
+      throw new NotFoundException('Created document not found');
+    }
+
+    const tagsResponse = completeDocument.documentTags
+      ? completeDocument.documentTags.map((it) => ({
+          id: it.tag.id,
+          name: it.tag.name,
+        }))
+      : [];
+
+    return plainToInstance(
+      DocumentResponseDto,
+      {
+        ...completeDocument,
+        createdById: completeDocument.createdBy.id,
+        createdByName: completeDocument.createdBy.name,
+        groupName: completeDocument.group?.name,
+        categoryName: completeDocument.category?.name,
+        tags: tagsResponse,
+      },
+      {
+        excludeExtraneousValues: true,
+      },
+    );
+  }
   private async extractPdfContentFromService(
     fileUrl: string,
   ): Promise<{ text: string; pageCount: number }> {
@@ -815,6 +971,80 @@ export class DocumentService {
   }
 
   /**
+   * Lấy tất cả tài liệu chờ phê duyệt cho admin
+   * @param query - Thông tin query (page, limit, search)
+   * @returns Danh sách tài liệu chờ phê duyệt
+   */
+  async getPendingDocuments(query: GetDocumentsDto) {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.documentRepository
+      .createQueryBuilder('document')
+      .leftJoinAndSelect('document.createdBy', 'createdBy')
+      .select([
+        'document.id',
+        'document.title',
+        'document.description',
+        'document.created_at',
+        'document.approval_status',
+        'document.accessType',
+        'createdBy.id',
+        'createdBy.name',
+      ])
+      .where('document.approval_status = :status', {
+        status: ApprovalStatus.PENDING,
+      });
+
+    // Áp dụng tìm kiếm nếu có
+    if (search) {
+      queryBuilder.andWhere(
+        '(document.title LIKE :search OR document.description LIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    // Sắp xếp theo thời gian tạo mới nhất
+    queryBuilder.orderBy('document.created_at', 'DESC');
+
+    // Thực hiện truy vấn với phân trang
+    const [documents, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    // Chuyển đổi sang DTO
+    const data = documents.map((doc) =>
+      plainToInstance(
+        DocumentResponseDto,
+        {
+          id: doc.id,
+          title: doc.title,
+          description: doc.description,
+          created_at: doc.created_at,
+          approval_status: doc.approval_status,
+          accessType: doc.accessType,
+          createdById: doc.createdBy?.id,
+          createdByName: doc.createdBy?.name,
+        },
+        {
+          excludeExtraneousValues: true,
+        },
+      ),
+    );
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
    * Lấy document theo category_id
    * @param query - lấy thông tin query
    * @returns Danh sách Document
@@ -986,6 +1216,7 @@ export class DocumentService {
         'document.created_at',
         'document.updated_at',
         'document.metadata',
+        'document.thumbnailUrl',
         'document.likeCount',
         'document.view',
         'document.rating',
@@ -1077,6 +1308,46 @@ export class DocumentService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async requestApproval(documentId: string) {
+    const document = await this.documentRepository.findOne({
+      where: { id: documentId },
+    });
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+    document.approval_status = ApprovalStatus.PENDING;
+    await this.documentRepository.save(document);
+    return document;
+  }
+
+  async approveDocument(documentId: string) {
+    const document = await this.documentRepository.findOne({
+      where: { id: documentId },
+    });
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+    document.approval_status = ApprovalStatus.APPROVED;
+    await this.documentRepository.update(documentId, {
+      approval_status: ApprovalStatus.APPROVED,
+      accessType: DocumentType.PUBLIC,
+    });
+    return document;
+  }
+
+  async rejectDocument(documentId: string) {
+    const document = await this.documentRepository.findOne({
+      where: { id: documentId },
+    });
+    if (!document)
+      throw new NotFoundException(`Document with ID ${documentId} not found`);
+
+    await this.documentRepository.update(documentId, {
+      approval_status: ApprovalStatus.REJECTED,
+    });
+    return document;
   }
 
   async searchDocumentsPublic(query: GetDocumentsDto): Promise<{
@@ -1184,6 +1455,44 @@ export class DocumentService {
         limit,
         totalPages: Math.ceil(total / limit),
       },
+    };
+  }
+  //Admin
+  async getStats(): Promise<DocumentStatsResponseDto> {
+    const now = new Date();
+
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const endOfLastMonth = new Date(startOfThisMonth.getTime() - 1);
+    const totalDocuments = await this.documentRepository.count();
+    const newDocumentsThisMonth = await this.documentRepository
+      .createQueryBuilder('document')
+      .where('document.created_at >= :startOfThisMonth', { startOfThisMonth })
+      .getCount();
+
+    const newDocumentsLastMonth = await this.documentRepository
+      .createQueryBuilder('document')
+      .where('document.created_at >= :startOfLastMonth', { startOfLastMonth })
+      .andWhere('document.created_at <= :endOfLastMonth', { endOfLastMonth })
+      .getCount();
+
+    const growthCount = newDocumentsThisMonth - newDocumentsLastMonth;
+
+    const growthPercentage =
+      newDocumentsLastMonth > 0
+        ? Math.round((growthCount / newDocumentsLastMonth) * 100 * 100) / 100
+        : newDocumentsThisMonth > 0
+          ? 100
+          : 0;
+
+    return {
+      totalDocuments,
+      newDocumentsThisMonth,
+      newDocumentsLastMonth,
+      growthPercentage,
+      growthCount,
     };
   }
 }

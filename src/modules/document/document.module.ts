@@ -45,12 +45,26 @@ import { TagModule } from '../tag/tag.module';
         const allowedMimeTypes = [
           'application/pdf',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+
+          // Image types
+          'image/jpeg',
+          'image/png',
+          'image/gif',
+          'image/webp',
+          'image/svg+xml',
+          'image/tiff',
+          'image/bmp',
         ];
 
         if (allowedMimeTypes.includes(file.mimetype)) {
           cb(null, true);
         } else {
-          cb(new Error('Chỉ chấp nhận file PDF và Word (.docx)'), false);
+          cb(
+            new Error(
+              'Chỉ chấp nhận file PDF và Word (.docx) cũng như hình ảnh',
+            ),
+            false,
+          );
         }
       },
     }),

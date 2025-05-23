@@ -15,6 +15,7 @@ import { UserResponseDto } from './dto/response-user.dto';
 import { UserUpdateDTO } from './dto/update-user.dto';
 import { plainToInstance } from 'class-transformer';
 import { UserStatus } from 'src/common/enum/permissionType.enum';
+import { GetUsersDto } from './dto/get-users.dto';
 
 @Injectable()
 export class UserService {
@@ -29,23 +30,100 @@ export class UserService {
    * Retrieve all users with their group memberships and document counts.
    * @returns Array of UserResponseDto
    */
-  async findAll(): Promise<UserResponseDto[]> {
-    const users = await this.userRepository.find({
-      relations: ['groupMemberships', 'groupMemberships.group'],
-    });
+  async findAll(query: GetUsersDto): Promise<{
+    data: UserResponseDto[];
+    meta: { total: number; page: number; limit: number; totalPages: number };
+  }> {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
 
-    const userDtos = await Promise.all(
-      users.map(async (user) => {
-        const documentsUploaded = await this.countDocumentsUploaded(user.id);
-        return plainToInstance(
+    const queryBuilder = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.groupMemberships', 'groupMemberships')
+      .leftJoinAndSelect('groupMemberships.group', 'group')
+      .select([
+        'user.id',
+        'user.name',
+        'user.email',
+        'user.created_at',
+        'user.registrationDate',
+        'user.lastLogin',
+        'user.username',
+        'user.status',
+        'user.role',
+        'user.avatar',
+        'user.phone',
+        'user.address',
+        'user.bio',
+        'groupMemberships.user_id',
+        'groupMemberships.group_id',
+        'groupMemberships.role',
+        'group.id',
+        'group.name',
+      ]);
+
+    // Áp dụng tìm kiếm
+    if (search) {
+      queryBuilder.andWhere(
+        '(user.name ILIKE :search OR user.email ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    queryBuilder.orderBy('user.created_at', 'DESC').skip(skip).take(limit);
+
+    const [users, total] = await queryBuilder.getManyAndCount();
+
+    // Đếm số tài liệu đã tải lên cho tất cả người dùng trong một truy vấn
+    const userIds = users.map((user) => user.id);
+
+    if (userIds.length === 0) {
+      // Nếu không có user nào, trả về map rỗng
+      const userDtos = users.map((user) =>
+        plainToInstance(
           UserResponseDto,
-          { ...user, documentsUploaded },
+          {
+            ...user,
+            documentsUploaded: 0,
+          },
           { excludeExtraneousValues: true },
-        );
-      }),
+        ),
+      );
+
+      return {
+        data: userDtos,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    }
+
+    // Sử dụng helper method để lấy document counts
+    const documentCountMap = await this.getDocumentCounts(userIds);
+
+    const userDtos = users.map((user) =>
+      plainToInstance(
+        UserResponseDto,
+        {
+          ...user,
+          documentsUploaded: documentCountMap[user.id] || 0,
+        },
+        { excludeExtraneousValues: true },
+      ),
     );
 
-    return userDtos;
+    return {
+      data: userDtos,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   /**
@@ -78,6 +156,24 @@ export class UserService {
       { ...user, documentsUploaded },
       { excludeExtraneousValues: true },
     );
+  }
+
+  async getNewUsers(query: GetUsersDto) {
+    const { page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+
+    const [users, total] = await this.userRepository
+      .createQueryBuilder('user')
+      .select(['user.id', 'user.name', 'user.email', 'user.created_at'])
+      .orderBy('user.created_at', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data: users,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   /**
@@ -288,9 +384,128 @@ export class UserService {
       throw new HttpException('User ID is required', HttpStatus.BAD_REQUEST);
     }
 
+    // Sử dụng tên cột foreign key 'created_by' vì createdBy là quan hệ với User
     return this.documentRepository
       .createQueryBuilder('document')
       .where('document.created_by = :userId', { userId })
       .getCount();
+  }
+
+  /**
+   * Get document counts for multiple users efficiently
+   * @param userIds - Array of user IDs
+   * @returns Record mapping user ID to document count
+   */
+  private async getDocumentCounts(
+    userIds: string[],
+  ): Promise<Record<string, number>> {
+    if (userIds.length === 0) {
+      return {};
+    }
+
+    try {
+      // Phương pháp 1: Sử dụng query builder với raw query
+      const documentCounts = await this.documentRepository
+        .createQueryBuilder('document')
+        .select([
+          'document.created_by AS userId',
+          'COUNT(document.id) AS count',
+        ])
+        .where('document.created_by IN (:...userIds)', { userIds })
+        .groupBy('document.created_by')
+        .getRawMany();
+
+      const countMap = documentCounts.reduce(
+        (map, item) => {
+          const userId = item.userId || item.userid;
+          const count = parseInt(item.count, 10) || 0;
+
+          if (userId) {
+            map[userId] = count;
+          }
+
+          return map;
+        },
+        {} as Record<string, number>,
+      );
+
+      return countMap;
+    } catch (error) {
+      console.error('Error getting document counts:', error);
+
+      const countMap: Record<string, number> = {};
+
+      for (const userId of userIds) {
+        try {
+          const count = await this.documentRepository
+            .createQueryBuilder('document')
+            .where('document.created_by = :userId', { userId })
+            .getCount();
+          countMap[userId] = count;
+        } catch (err) {
+          console.error(`Error counting documents for user ${userId}:`, err);
+          countMap[userId] = 0;
+        }
+      }
+
+      return countMap;
+    }
+  }
+
+  /**
+   * Get user count statistics including total users and growth compared to last month
+   * @returns Object containing total users and growth statistics
+   */
+  async getUserCount(): Promise<{
+    totalUsers: number;
+    newUsersThisMonth: number;
+    newUsersLastMonth: number;
+    growthPercentage: number;
+    growthCount: number;
+  }> {
+    // Lấy ngày hiện tại
+    const now = new Date();
+
+    // Tính toán ngày đầu tháng hiện tại
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Tính toán ngày đầu tháng trước
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    // Tính toán ngày cuối tháng trước (đầu tháng hiện tại - 1 ngày)
+    const endOfLastMonth = new Date(startOfThisMonth.getTime() - 1);
+
+    // Đếm tổng số user
+    const totalUsers = await this.userRepository.count();
+
+    // Đếm số user mới trong tháng hiện tại
+    const newUsersThisMonth = await this.userRepository
+      .createQueryBuilder('user')
+      .where('user.created_at >= :startOfThisMonth', { startOfThisMonth })
+      .getCount();
+
+    // Đếm số user mới trong tháng trước
+    const newUsersLastMonth = await this.userRepository
+      .createQueryBuilder('user')
+      .where('user.created_at >= :startOfLastMonth', { startOfLastMonth })
+      .andWhere('user.created_at <= :endOfLastMonth', { endOfLastMonth })
+      .getCount();
+
+    // Tính toán tăng trưởng
+    const growthCount = newUsersThisMonth - newUsersLastMonth;
+    const growthPercentage =
+      newUsersLastMonth > 0
+        ? Math.round((growthCount / newUsersLastMonth) * 100 * 100) / 100 // Làm tròn 2 chữ số thập phân
+        : newUsersThisMonth > 0
+          ? 100
+          : 0;
+
+    return {
+      totalUsers,
+      newUsersThisMonth,
+      newUsersLastMonth,
+      growthPercentage,
+      growthCount,
+    };
   }
 }

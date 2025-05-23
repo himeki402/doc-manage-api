@@ -3,3 +3,10 @@ export enum DocumentType {
   PRIVATE = 'PRIVATE',
   GROUP = 'GROUP',
 }
+
+export enum ApprovalStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  NULL = 'NULL',
+}

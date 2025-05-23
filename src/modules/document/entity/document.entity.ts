@@ -9,7 +9,10 @@ import {
   OneToMany,
 } from 'typeorm';
 import { User } from '../../user/user.entity';
-import { DocumentType } from 'src/common/enum/documentType.enum';
+import {
+  ApprovalStatus,
+  DocumentType,
+} from 'src/common/enum/documentType.enum';
 import { Category } from '../../category/category.entity';
 import { Comment } from '../../comment/comment.entity';
 import { DocumentTag } from '../../tag/document-tags.entity';
@@ -80,6 +83,16 @@ export class Document extends BaseEntity {
 
   @Column({ type: 'tsvector', nullable: true })
   document_vector: string;
+
+  @Column({
+    type: 'enum',
+    enum: ApprovalStatus,
+    default: ApprovalStatus.NULL,
+  })
+  approval_status?: ApprovalStatus;
+
+  @Column({ type: 'text', nullable: true })
+  summary?: string;
 
   @ManyToOne(() => Category, (category) => category.documents)
   @JoinColumn({ name: 'category_id' })

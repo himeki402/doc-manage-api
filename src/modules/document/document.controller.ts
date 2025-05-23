@@ -35,12 +35,19 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { validate as isUUID } from 'uuid';
+import { create } from 'domain';
+import { DocumentAuditLogService } from './service/documentAuditLog.service';
+import { DocumentStatsResponseDto } from './dto/get-documents-stats.dto';
+import { plainToInstance } from 'class-transformer';
 
 @ApiTags('documents')
 @ApiBearerAuth()
 @Controller('documents')
 export class DocumentController {
-  constructor(private readonly documentService: DocumentService) {}
+  constructor(
+    private readonly documentService: DocumentService,
+    private readonly documentAuditLogService: DocumentAuditLogService,
+  ) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
@@ -60,6 +67,31 @@ export class DocumentController {
     @Req() request: RequestWithUser,
   ) {
     const data = await this.documentService.createDocument(
+      file,
+      createDocumentDto,
+      request.user.id,
+    );
+    return ResponseData.success(data, 'Document uploaded successfully');
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @Post('upload-image-document')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Tải lên hình ảnh tài liệu' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({
+    status: 201,
+    description: 'Hình ảnh tài liệu đã được tải lên thành công',
+  })
+  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+  @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+  async uploadImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() createDocumentDto: CreateDocumentDto,
+    @Req() request: RequestWithUser,
+  ) {
+    const data = await this.documentService.createImage(
       file,
       createDocumentDto,
       request.user.id,
@@ -95,7 +127,6 @@ export class DocumentController {
       'Public documents retrieved successfully',
     );
   }
-
 
   @Public()
   @Get('search')
@@ -143,6 +174,50 @@ export class DocumentController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN)
+  @ApiOperation({
+    summary: 'Lấy tất cả tài liệu cần approve(chỉ dành cho admin)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tất cả tài liệu cần approve đã được lấy thành công',
+  })
+  @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+  @ApiResponse({ status: 403, description: 'Không đủ quyền hạn' })
+  @Get('admin/pending')
+  async getPendingDocuments(@Query() query: GetDocumentsDto) {
+    const result = await this.documentService.getPendingDocuments(query);
+    return ResponseData.paginate(
+      result.data,
+      result.meta.total,
+      result.meta.page,
+      result.meta.limit,
+      'Pending documents retrieved successfully',
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN)
+  @Get('admin/stats')
+  @ApiOperation({
+    summary: 'Lấy thống kê tài liệu (chỉ dành cho admin)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Thống kê tài liệu đã được lấy thành công',
+    type: DocumentStatsResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+  @ApiResponse({ status: 403, description: 'Không đủ quyền hạn' })
+  async getStats() {
+    const result = await this.documentService.getStats();
+    const data = plainToInstance(DocumentStatsResponseDto, result, {
+      excludeExtraneousValues: true,
+    });
+    return ResponseData.success(data, 'Stats retrieved successfully');
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
   @Get('my-documents')
   @ApiOperation({ summary: 'Lấy danh sách tài liệu của người dùng hiện tại' })
@@ -177,6 +252,55 @@ export class DocumentController {
       result.meta.limit,
       'User documents retrieved successfully',
     );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.USER)
+  @Post(':id/request-approval')
+  @ApiOperation({ summary: 'Gửi yêu cầu phê duyệt tài liệu' })
+  async requestApproval(
+    @Param('id') id: string,
+    @Req() request: RequestWithUser,
+  ) {
+    const document = await this.documentService.requestApproval(id);
+    await this.documentAuditLogService.create({
+      document_id: id,
+      user_id: request.user.id,
+      action_type: 'REQUEST_APPROVAL',
+      action_details: `Document ${document.id} requested approval by user ${request.user.id}`,
+      ip_address: request.ip,
+      user_agent: request.headers['user-agent'] || 'Mozilla/5.0',
+    });
+    return ResponseData.success(document, 'Approval requested successfully');
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN)
+  @Post(':id/approve')
+  @ApiOperation({ summary: 'Phê duyệt tài liệu' })
+  async approveDocument(
+    @Param('id') id: string,
+    @Req() request: RequestWithUser,
+  ) {
+    const document = await this.documentService.approveDocument(id);
+    await this.documentAuditLogService.create({
+      document_id: id,
+      user_id: request.user.id,
+      action_type: 'APPROVE_DOCUMENT',
+      action_details: `Document ${document.id} approved by user ${request.user.id}`,
+      ip_address: request.ip,
+      user_agent: request.headers['user-agent'] || 'Mozilla/5.0',
+    });
+    return ResponseData.success(document, 'Document approved successfully');
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN)
+  @Post(':id/reject')
+  @ApiOperation({ summary: 'Từ chối phê duyệt tài liệu' })
+  async rejectDocument(@Param('id') id: string) {
+    const document = await this.documentService.rejectDocument(id);
+    return ResponseData.success(document, 'Document rejected successfully');
   }
 
   @Public()
