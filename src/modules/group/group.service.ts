@@ -34,10 +34,10 @@ export class GroupService {
   async createGroup(
     createGroupDto: CreateGroupDto,
     userId: string,
-  ): Promise<Group> {
+  ): Promise<GroupResponseDto> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
-      throw new NotFoundException('Người dùng không tồn tại');
+      throw new NotFoundException(`Người dùng với ID ${userId} không tồn tại`);
     }
 
     const group = this.groupRepository.create({
@@ -56,7 +56,7 @@ export class GroupService {
 
     await this.groupMemberRepository.save(groupMember);
 
-    return savedGroup;
+    return this.findOne(savedGroup.id, userId);
   }
 
   async findAll(
@@ -458,56 +458,71 @@ export class GroupService {
       throw new NotFoundException(`Người dùng với ID ${userId} không tồn tại`);
     }
 
-    const memberships = await this.groupMemberRepository
-      .createQueryBuilder('membership')
-      .leftJoinAndSelect('membership.group', 'group')
-      .leftJoinAndSelect('group.members', 'members')
-      .leftJoinAndSelect('group.documents', 'documents')
-      .leftJoinAndSelect('group.groupAdmin', 'groupAdmin')
-      .leftJoinAndSelect('documents.createdBy', 'createdBy')
-      .leftJoinAndSelect('members.user', 'user')
-      .select([
-        'group.id',
-        'group.name',
-        'group.description',
-        'group.created_at',
-        'group.updated_at',
-        'members.user_id',
-        'members.group_id',
-        'members.role',
-        'members.joined_at',
-        'user.email',
-        'user.name',
-        'documents.id',
-        'documents.title',
-        'documents.mimeType',
-        'documents.fileSize',
-        'documents.created_at',
-        'createdBy.id',
-        'createdBy.name',
-        'groupAdmin.id',
-        'groupAdmin.name',
-      ])
-      .where('membership.user_id = :userId', { userId })
-      .getMany();
+    try {
+      // Cách tiếp cận 1: Sử dụng subquery để lấy groups của user, sau đó load all members
+      const userGroupIds = await this.groupMemberRepository
+        .createQueryBuilder('gm')
+        .select('gm.group_id')
+        .where('gm.user_id = :userId', { userId })
+        .getRawMany();
 
-    const groups = memberships
-      .map((membership) => membership.group)
-      .filter((group): group is Group => group !== undefined);
+      if (userGroupIds.length === 0) {
+        return [];
+      }
 
-    // Enrich groups
-    return groups.map((group) => ({
-      ...group,
-      memberCount: group.members ? group.members.length : 0,
-      isAdmin:
-        group.groupAdmin?.id === userId || user.role === SystemRole.ADMIN,
-      documentCount: group.documents ? group.documents.length : 0,
-      members:
-        group.members?.map((member) => ({
-          ...member,
-          joined_at: member.joined_at || group.created_at || new Date(),
-        })) || [],
-    }));
+      const groupIds = userGroupIds.map((item) => item.gm_group_id);
+
+      const groups = await this.groupRepository
+        .createQueryBuilder('group')
+        .leftJoinAndSelect('group.members', 'members')
+        .leftJoinAndSelect('group.documents', 'documents')
+        .leftJoinAndSelect('group.groupAdmin', 'groupAdmin')
+        .leftJoinAndSelect('documents.createdBy', 'createdBy')
+        .leftJoinAndSelect('members.user', 'user')
+        .select([
+          'group.id',
+          'group.name',
+          'group.description',
+          'group.created_at',
+          'group.updated_at',
+          'members.user_id',
+          'members.group_id',
+          'members.role',
+          'members.joined_at',
+          'user.email',
+          'user.name',
+          'user.id',
+          'documents.id',
+          'documents.title',
+          'documents.mimeType',
+          'documents.fileSize',
+          'documents.created_at',
+          'createdBy.id',
+          'createdBy.name',
+          'groupAdmin.id',
+          'groupAdmin.name',
+        ])
+        .where('group.id IN (:...groupIds)', { groupIds })
+        .getMany();
+
+      return groups.map((group) => ({
+        ...group,
+        memberCount: group.members ? group.members.length : 0,
+        isAdmin:
+          group.groupAdmin?.id === userId || user.role === SystemRole.ADMIN,
+        documentCount: group.documents ? group.documents.length : 0,
+        members:
+          group.members?.map((member) => ({
+            ...member,
+            joined_at: member.joined_at || group.created_at || new Date(),
+          })) || [],
+      }));
+    } catch (error) {
+      console.error('Error in getGroupsByUser:', error);
+      throw new BadRequestException(
+        'Không thể lấy danh sách nhóm của người dùng',
+      );
+    }
   }
 
   async updateMemberRole(

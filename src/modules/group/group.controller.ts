@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
   Query,
+  Put,
 } from '@nestjs/common';
 import { GroupService } from './group.service';
 import JwtAuthGuard from '../auth/guard/jwt-auth.guard';
@@ -77,25 +78,14 @@ export class GroupController {
     );
   }
 
-  @Get(':id')
+  @Get('me')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
-  @ApiOperation({ summary: 'Lấy thông tin chi tiết của một nhóm' })
-  @ApiResponse({
-    status: 200,
-    description: 'Thông tin nhóm đã được lấy thành công',
-    type: GroupResponseDto,
+  @ApiOperation({
+    summary: 'Lấy danh sách nhóm của người dùng hiện tại',
+    description:
+      'Trả về danh sách tất cả các nhóm mà người dùng hiện tại tham gia, dựa trên ID người dùng từ token JWT.',
   })
-  @ApiResponse({ status: 404, description: 'Nhóm không tồn tại' })
-  async findOne(@Param('id') id: string, @Req() request: RequestWithUser) {
-    const group = await this.groupService.findOne(id, request.user.id);
-    return ResponseData.success(group, 'Thông tin nhóm đã được lấy thành công');
-  }
-
-  @Get('my-groups')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
-  @ApiOperation({ summary: 'Lấy danh sách nhóm của người dùng hiện tại' })
   @ApiResponse({
     status: 200,
     description: 'Danh sách nhóm của bạn đã được lấy thành công',
@@ -109,7 +99,26 @@ export class GroupController {
     );
   }
 
-  @Patch(':id')
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @ApiOperation({
+    summary: 'Lấy chi tiết một nhóm theo ID',
+    description:
+      'Trả về thông tin chi tiết của một nhóm cụ thể dựa trên ID của nhóm. Yêu cầu người dùng có quyền truy cập nhóm.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Thông tin nhóm đã được lấy thành công',
+    type: GroupResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Nhóm không tồn tại' })
+  async findOne(@Param('id') id: string, @Req() request: RequestWithUser) {
+    const group = await this.groupService.findOne(id, request.user.id);
+    return ResponseData.success(group, 'Thông tin nhóm đã được lấy thành công');
+  }
+
+  @Put(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
   @ApiOperation({ summary: 'Cập nhật thông tin nhóm' })

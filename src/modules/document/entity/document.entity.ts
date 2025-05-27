@@ -94,6 +94,9 @@ export class Document extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   summary?: string;
 
+  @Column({ type: 'boolean', default: false })
+  isImportant: boolean;
+
   @ManyToOne(() => Category, (category) => category.documents)
   @JoinColumn({ name: 'category_id' })
   category: Category;
