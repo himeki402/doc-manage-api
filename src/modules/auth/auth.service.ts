@@ -13,6 +13,9 @@ import { ConfigService } from '@nestjs/config';
 import { CreateUserDTO } from '../user/dto/create-user.dto';
 import { UserResponseDto } from '../user/dto/response-user.dto';
 import { plainToInstance } from 'class-transformer';
+import { InjectRepository } from '@nestjs/typeorm';
+import { GroupMember } from '../group/groupMember.entity';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class AuthService {
@@ -20,6 +23,8 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
     private configService: ConfigService,
+    @InjectRepository(GroupMember)
+    private groupMemberRepository: Repository<GroupMember>,
   ) {}
 
   async getAuthenticatedUser(
@@ -97,10 +102,16 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
+
+    const groupMemberships = await this.groupMemberRepository.find({
+      where: { user_id: user.id },
+      relations: ['group', 'group.groupAdmin'],
+    });
     const currentUser = {
       id: user.id,
       username: user.username,
       role: user.role,
+      groupMemberships: groupMemberships,
     };
     return currentUser;
   }

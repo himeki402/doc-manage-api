@@ -110,7 +110,7 @@ export class Document extends BaseEntity {
 
   @ManyToOne(() => Group, (group) => group.documents)
   @JoinColumn({ name: 'group_id' })
-  group?: Group;
+  group?: Group | null;
 
   @OneToMany(() => Comment, (comment) => comment.document, {
     cascade: true,

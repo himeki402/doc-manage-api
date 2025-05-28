@@ -651,7 +651,7 @@ export class DocumentService {
       document.category = category;
     }
 
-    // Cập nhật group
+    // Cập nhật group và xử lý accessType
     if (updateData.accessType === DocumentType.GROUP && updateData.groupId) {
       if (document.group?.id !== updateData.groupId) {
         const group = await this.groupRepository.findOne({
@@ -663,7 +663,7 @@ export class DocumentService {
           );
         }
 
-        // Kiểm tra xem người dùng có phải là thành viên của nhóm không
+        // Kiểm tra thành viên nhóm
         const groupMember = await this.groupMemberRepository.findOne({
           where: { group_id: updateData.groupId, user_id: userId },
         });
@@ -672,11 +672,9 @@ export class DocumentService {
         }
         document.group = group;
       }
-    } else if (
-      updateData.accessType &&
-      updateData.accessType !== DocumentType.GROUP
-    ) {
-      document.group = undefined;
+    } else {
+      document.group = null;
+      document.accessType = DocumentType.PRIVATE;
     }
 
     // Cập nhật tags
@@ -691,12 +689,10 @@ export class DocumentService {
           (id) => !(updateData.tagIds ?? []).includes(id),
         );
 
-        // Xóa các tag bị bỏ chọn
         for (const tagId of tagsToRemove) {
           await this.documentTagService.remove(id, tagId, userId);
         }
 
-        // Thêm các tag mới
         for (const tagId of tagsToAdd) {
           if (!id) {
             throw new BadRequestException(
@@ -718,7 +714,6 @@ export class DocumentService {
         );
       }
     } else if (updateData.tagIds && updateData.tagIds.length === 0) {
-      // Nếu tagIds là mảng rỗng, xóa tất cả tag hiện tại
       const currentTagIds = document.documentTags?.map((dt) => dt.tag.id) || [];
       for (const tagId of currentTagIds) {
         await this.documentTagService.remove(id, tagId, userId);
@@ -732,20 +727,10 @@ export class DocumentService {
     if (updateData.metadata) document.metadata = updateData.metadata;
     if (updateData.accessType) document.accessType = updateData.accessType;
 
-    // Làm sạch quan hệ documentTags để tránh lỗi TypeORM
+    // Làm sạch quan hệ documentTags
     document.documentTags = undefined;
 
     const updatedDocument = await this.documentRepository.save(document);
-
-    // Ghi lại log
-    await this.documentAuditLogService.create({
-      document_id: updatedDocument.id,
-      user_id: userId,
-      action_type: 'UPDATE_DOCUMENT',
-      action_details: `Document ${document.id} updated by user ${userId}`,
-      ip_address: '127.0.0.1',
-      user_agent: 'Mozilla/5.0',
-    });
 
     // Load lại document với đầy đủ quan hệ
     const completeDocument = await this.documentRepository.findOne({
@@ -763,7 +748,6 @@ export class DocumentService {
       throw new NotFoundException('Updated document not found');
     }
 
-    // Trả về document đã cập nhật
     return plainToInstance(
       DocumentResponseDto,
       {
@@ -781,6 +765,56 @@ export class DocumentService {
         excludeExtraneousValues: true,
       },
     );
+  }
+
+  async removeDocumentFromGroup(
+    documentId: string,
+    userId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    // Tìm tài liệu
+    const document = await this.documentRepository.findOne({
+      where: { id: documentId },
+      relations: ['createdBy', 'group'], // Chỉ lấy quan hệ cần thiết
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Document with ID '${documentId}' not found`);
+    }
+
+    // Kiểm tra quyền
+    if (document.createdBy.id !== userId) {
+      const permission = await this.documentPermissionRepository.findOne({
+        where: {
+          document_id: documentId,
+          entity_type: EntityType.USER,
+          entity_id: userId,
+          permission_type: PermissionType.WRITE,
+        },
+      });
+      if (!permission) {
+        throw new ForbiddenException(
+          'You do not have permission to remove this document from the group',
+        );
+      }
+    }
+
+    if (!document.group) {
+      throw new BadRequestException(
+        'Document is not associated with any group',
+      );
+    }
+
+    const previousGroupId = document.group.id;
+    document.group = null;
+    document.accessType = DocumentType.PRIVATE;
+
+    await this.documentRepository.save(document);
+
+    // Trả về phản hồi xác nhận
+    return {
+      success: true,
+      message: `Document ${documentId} has been successfully removed from group ${previousGroupId} and set to private.`,
+    };
   }
 
   async remove(id: string, userId: string): Promise<void> {

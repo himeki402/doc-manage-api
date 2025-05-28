@@ -1,4 +1,17 @@
-import { Controller, Get, Param, Post, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+  Query,
+  UseInterceptors,
+  UploadedFile,
+  Req,
+  BadRequestException,
+  Patch,
+  Body,
+} from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserResponseDto } from './dto/response-user.dto';
 import JwtAuthGuard from '../auth/guard/jwt-auth.guard';
@@ -10,6 +23,10 @@ import { ResponseData } from 'src/helpers/response.helper';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { UserCountResponseDto } from './dto/user-count-response.dto';
 import { plainToInstance } from 'class-transformer';
+import { FileInterceptor } from '@nestjs/platform-express';
+import RequestWithUser from '../auth/interface/requestWithUser.interface';
+import { CloudinaryService } from '../document/service/cloudinary.service';
+import { UserUpdateDTO } from './dto/update-user.dto';
 
 @Controller('users')
 export class UserController {
@@ -56,16 +73,48 @@ export class UserController {
     return ResponseData.success(data, 'User stats retrieved successfully');
   }
 
-  // @Post('/:id')
-  // getUser(@Param('id') id: string) {
-  //   return this.userService.getById(id);
-  // }
+  @Patch('avatar')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @ApiOperation({
+    summary: 'Upload avatar',
+    description: 'Cho phép người dùng upload avatar của họ',
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAvatar(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() request: RequestWithUser,
+  ) {
+    if (!file.mimetype.startsWith('image/')) {
+      throw new BadRequestException('File phải là hình ảnh');
+    }
 
-  // @Put('/:id')
-  // updateUser(
-  //   @Param('id') id: string,
-  //   @Body() userData: Partial<User>,
-  // ): Promise<{ result: string }> {
-  //   return this.userService.updateUser(+id, userData);
-  // }
+    const data = await this.userService.uploadAvatar(
+      request.user.id,
+      file.buffer,
+    );
+
+    return ResponseData.success(data, 'Avatar đã được upload thành công');
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @ApiOperation({
+    summary: 'Cập nhật thông tin người dùng',
+    description: 'Cho phép người dùng cập nhật thông tin cá nhân của họ',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Thông tin người dùng đã được cập nhật thành công',
+    type: UserResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Bad Request' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async updateUser(
+    @Param('id') id: string,
+    @Body() userData: UserUpdateDTO,
+  ): Promise<UserResponseDto> {
+    return this.userService.updateUser(id, userData);
+  }
 }

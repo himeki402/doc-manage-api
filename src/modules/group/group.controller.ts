@@ -29,6 +29,7 @@ import {
   UpdateGroupDto,
 } from './dto/group-dto';
 import { GroupMember } from './groupMember.entity';
+import { GroupRoles } from 'src/decorator/groupRoles.decorator';
 
 @ApiTags('groups')
 @Controller('groups')
@@ -102,6 +103,7 @@ export class GroupController {
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @GroupRoles(GroupRole.ADMIN, GroupRole.MEMBER)
   @ApiOperation({
     summary: 'Lấy chi tiết một nhóm theo ID',
     description:
@@ -280,4 +282,6 @@ export class GroupController {
       'Vai trò thành viên đã được cập nhật thành công',
     );
   }
+
+  // --- Member Operations ---
 }

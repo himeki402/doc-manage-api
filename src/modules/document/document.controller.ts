@@ -12,6 +12,7 @@ import {
   Put,
   Delete,
   BadRequestException,
+  Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentService } from './service/document.service';
@@ -364,7 +365,45 @@ export class DocumentController {
       request.user.id,
       updateData,
     );
+
+    await this.documentAuditLogService.create({
+      document_id: data.id,
+      user_id: request.user.id,
+      action_type: 'UPDATE_DOCUMENT',
+      action_details: `Document ${data.id} updated by user ${request.user.id}`,
+      ip_address: request.ip,
+      user_agent: request.headers['user-agent'] || 'Mozilla/5.0',
+    });
     return ResponseData.success(data, 'Document updated successfully');
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @Patch(':id/remove-from-group')
+  @ApiOperation({ summary: 'Gỡ tài liệu khỏi nhóm' })
+  @ApiParam({ name: 'id', description: 'ID của tài liệu' })
+  @ApiResponse({
+    status: 200,
+    description: 'Tài liệu đã được gỡ khỏi nhóm thành công',
+  })
+  async removeFromGroup(
+    @Param('id') id: string,
+    @Req() request: RequestWithUser,
+  ) {
+    await this.documentService.removeDocumentFromGroup(id, request.user.id);
+
+    await this.documentAuditLogService.create({
+      document_id: id,
+      user_id: request.user.id,
+      action_type: 'REMOVE_DOCUMENT_FROM_GROUP',
+      action_details: `Document ${id} removed from group by user ${request.user.id}`,
+      ip_address: request.ip,
+      user_agent: request.headers['user-agent'] || 'Mozilla/5.0',
+    });
+    return ResponseData.success(
+      null,
+      'Document removed from group successfully',
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

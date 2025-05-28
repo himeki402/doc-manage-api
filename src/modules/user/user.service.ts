@@ -16,6 +16,7 @@ import { UserUpdateDTO } from './dto/update-user.dto';
 import { plainToInstance } from 'class-transformer';
 import { UserStatus } from 'src/common/enum/permissionType.enum';
 import { GetUsersDto } from './dto/get-users.dto';
+import { CloudinaryService } from '../document/service/cloudinary.service';
 
 @Injectable()
 export class UserService {
@@ -24,6 +25,7 @@ export class UserService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Document)
     private readonly documentRepository: Repository<Document>,
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   /**
@@ -316,6 +318,60 @@ export class UserService {
     });
 
     const documentsUploaded = await this.countDocumentsUploaded(id);
+    return plainToInstance(
+      UserResponseDto,
+      { ...updatedUser, documentsUploaded },
+      { excludeExtraneousValues: true },
+    );
+  }
+
+  async uploadAvatar(
+    userId: string,
+    avatarBuffer: Buffer,
+  ): Promise<UserResponseDto> {
+    if (!userId) {
+      throw new HttpException('User ID is required', HttpStatus.BAD_REQUEST);
+    }
+
+    if (!avatarBuffer) {
+      throw new HttpException(
+        'Avatar file is required',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    if (user.avatarKey) {
+      await this.cloudinaryService.deleteAvatar(user.avatarKey).catch((err) => {
+        console.error(`Failed to delete old avatar: ${err.message}`);
+      });
+    }
+
+    const avatarResult =
+      await this.cloudinaryService.uploadAvatar(avatarBuffer);
+    const updates: Partial<User> = {
+      avatar: avatarResult.url,
+      avatarKey: avatarResult.public_id, 
+    };
+
+    await this.userRepository.update(userId, updates);
+    const updatedUser = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['groupMemberships', 'groupMemberships.group'],
+    });
+
+    if (!updatedUser) {
+      throw new NotFoundException(
+        `User with ID ${userId} not found after update`,
+      );
+    }
+
+    const documentsUploaded = await this.countDocumentsUploaded(userId);
     return plainToInstance(
       UserResponseDto,
       { ...updatedUser, documentsUploaded },

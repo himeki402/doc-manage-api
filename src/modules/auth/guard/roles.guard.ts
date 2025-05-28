@@ -63,12 +63,11 @@ export class RolesGuard implements CanActivate {
       return false;
     }
 
-    // Lấy documentId từ request
+    // Lấy documentId từ request (chỉ cho document APIs)
     const documentId =
-      request.params?.id ||
-      (request.body && 'document_id' in request.body
+      request.body && 'document_id' in request.body
         ? request.body.document_id
-        : null);
+        : null;
 
     // Kiểm tra SystemRole
     if (requiredSystemRoles) {
@@ -98,44 +97,75 @@ export class RolesGuard implements CanActivate {
       }
     }
 
-    // Kiểm tra GroupRole (nếu tài liệu thuộc nhóm)
-    if (requiredGroupRoles && documentId) {
-      const document = await this.documentRepository.findOne({
-        where: { id: documentId },
-        relations: ['group', 'group.groupAdmin'],
-      });
-      if (!document) {
-        return false;
-      }
+    // Kiểm tra Group Roles
+    if (requiredGroupRoles) {
+      // Lấy groupId từ request params hoặc body
+      const groupId =
+        request.params?.id || // Cho API như @Get(':id')
+        request.params?.groupId ||
+        request.params?.group_id ||
+        (request.body && 'group_id' in request.body
+          ? request.body.group_id
+          : null);
 
-      if (document.accessType === DocumentType.GROUP && document.group) {
-        // GROUP_ADMIN có toàn quyền
-        if (
-          document.group.groupAdmin &&
-          document.group.groupAdmin.id === user.id
-        ) {
-          return true;
+      if (groupId) {
+        // Tìm group membership từ user object
+        let groupMember: GroupMember | null = null;
+        if (user.groupMemberships && Array.isArray(user.groupMemberships)) {
+          groupMember =
+            user.groupMemberships.find((gm) => gm.group_id === groupId) || null;
         }
 
-        // Kiểm tra vai trò trong nhóm
-        const groupMember = await this.groupMemberRepository.findOne({
-          where: { group_id: document.group.id, user_id: user.id },
-        });
+        // Nếu chưa có, query từ database
+        if (!groupMember) {
+          groupMember = await this.groupMemberRepository.findOne({
+            where: { group_id: groupId, user_id: user.id },
+            relations: ['group', 'group.groupAdmin'],
+          });
+        }
+
         if (!groupMember) {
           return false;
         }
 
+        // Kiểm tra xem user có là group admin không
+        let isGroupAdmin = false;
+        if (groupMember.group?.groupAdmin?.id) {
+          isGroupAdmin = groupMember.group.groupAdmin.id === user.id;
+        } else {
+          // Query riêng để kiểm tra group admin nếu relation không load
+          const groupWithAdmin = await this.groupMemberRepository.query(
+            'SELECT group_admin_id FROM "group" WHERE id = $1',
+            [groupId],
+          );
+          if (groupWithAdmin.length > 0) {
+            isGroupAdmin = groupWithAdmin[0].group_admin_id === user.id;
+          }
+        }
+
+        if (isGroupAdmin) {
+          return true;
+        }
+
+        // Kiểm tra role trong group
         const hasGroupRole = requiredGroupRoles.includes(groupMember.role);
         if (!hasGroupRole) {
           return false;
         }
 
-        // Kiểm tra quyền cụ thể
+        // Phân quyền theo HTTP method
         const method = request.method.toUpperCase();
-        if (requiredGroupRoles.includes(GroupRole.ADMIN)) {
-          return true; // GROUP_ADMIN có quyền READ/WRITE
-        } else if (requiredGroupRoles.includes(GroupRole.MEMBER)) {
-          return method === 'GET'; // GROUP_MEMBER chỉ có quyền READ
+        if (groupMember.role === GroupRole.ADMIN) {
+          return true; // GROUP_ADMIN có mọi quyền
+        } else if (groupMember.role === GroupRole.MEMBER) {
+          // GROUP_MEMBER chỉ có quyền read (GET)
+          return method === 'GET';
+        }
+      } else {
+        // Nếu không có groupId, có thể là API list groups của user
+        const method = request.method.toUpperCase();
+        if (method === 'GET' && requiredGroupRoles.includes(GroupRole.MEMBER)) {
+          return true;
         }
       }
     }
