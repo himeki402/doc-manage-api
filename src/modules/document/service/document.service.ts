@@ -412,7 +412,7 @@ export class DocumentService {
         formData,
         {
           headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 10000,
+          timeout: 30000,
         },
       );
 
@@ -1247,6 +1247,7 @@ export class DocumentService {
         'document.fileUrl',
         'document.mimeType',
         'document.accessType',
+        'document.category_id',
         'document.created_at',
         'document.updated_at',
         'document.metadata',
@@ -1528,5 +1529,133 @@ export class DocumentService {
       growthPercentage,
       growthCount,
     };
+  }
+
+  /**
+   * Like document
+   * @param documentId - ID của tài liệu
+   * @param userId - ID của người dùng thực hiện like
+   * @returns Document đã được cập nhật
+   */
+  async likeDocument(documentId: string): Promise<DocumentResponseDto> {
+    // Kiểm tra document có tồn tại không
+    const document = await this.documentRepository.findOne({
+      where: { id: documentId },
+      relations: [
+        'createdBy',
+        'group',
+        'category',
+        'documentTags',
+        'documentTags.tag',
+      ],
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Document with ID '${documentId}' not found`);
+    }
+
+    await this.documentRepository.update(
+      { id: documentId },
+      {
+        likeCount: () => 'likeCount + 1',
+        ratingCount: () => 'ratingCount + 1',
+      },
+    );
+
+    // Lấy document đã cập nhật
+    const updatedDocument = await this.documentRepository.findOne({
+      where: { id: documentId },
+      relations: [
+        'createdBy',
+        'group',
+        'category',
+        'documentTags',
+        'documentTags.tag',
+      ],
+    });
+
+    if (!updatedDocument) {
+      throw new NotFoundException(
+        `Document with ID '${documentId}' not found after update`,
+      );
+    }
+
+    return plainToInstance(
+      DocumentResponseDto,
+      {
+        ...updatedDocument,
+        createdById: updatedDocument.createdBy.id,
+        createdByName: updatedDocument.createdBy.name,
+        groupName: updatedDocument.group?.name,
+        categoryName: updatedDocument.category?.name,
+      },
+      {
+        excludeExtraneousValues: true,
+      },
+    );
+  }
+
+  /**
+   * Dislike document
+   * @param documentId - ID của tài liệu
+   * @param userId - ID của người dùng thực hiện dislike
+   * @returns Document đã được cập nhật
+   */
+  async dislikeDocument(documentId: string): Promise<DocumentResponseDto> {
+    // Kiểm tra document có tồn tại không
+    const document = await this.documentRepository.findOne({
+      where: { id: documentId },
+      relations: [
+        'createdBy',
+        'group',
+        'category',
+        'documentTags',
+        'documentTags.tag',
+      ],
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Document with ID '${documentId}' not found`);
+    }
+
+    await this.documentRepository.update(
+      { id: documentId },
+      {
+        dislikeCount: () => 'dislikeCount + 1',
+        ratingCount: () => 'ratingCount + 1',
+      },
+    );
+
+    // Lấy document đã cập nhật
+    const updatedDocument = await this.documentRepository.findOne({
+      where: { id: documentId },
+      relations: [
+        'createdBy',
+        'group',
+        'category',
+        'documentTags',
+        'documentTags.tag',
+      ],
+    });
+
+    if (!updatedDocument) {
+      throw new NotFoundException(
+        `Document with ID '${documentId}' not found after update`,
+      );
+    }
+
+    return plainToInstance(
+      DocumentResponseDto,
+      {
+        ...updatedDocument,
+        createdById: updatedDocument.createdBy.id,
+        createdByName: updatedDocument.createdBy.name,
+        groupName: updatedDocument.group?.name,
+        categoryName: updatedDocument.category?.name,
+      },
+      {
+        excludeExtraneousValues: true,
+      },
+    );
   }
 }

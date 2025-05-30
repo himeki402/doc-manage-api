@@ -422,4 +422,59 @@ export class DocumentController {
     await this.documentService.remove(id, request.user.id);
     return ResponseData.success(null, 'Document deleted successfully');
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @Post(':id/like')
+  @ApiOperation({ summary: 'Like tài liệu' })
+  @ApiParam({ name: 'id', description: 'ID của tài liệu' })
+  @ApiResponse({
+    status: 200,
+    description: 'Tài liệu đã được like thành công',
+  })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy tài liệu' })
+  @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+  async likeDocument(@Param('id') id: string, @Req() request: RequestWithUser) {
+    const data = await this.documentService.likeDocument(id);
+
+    await this.documentAuditLogService.create({
+      document_id: id,
+      user_id: request.user.id,
+      action_type: 'LIKE_DOCUMENT',
+      action_details: `Document ${id} liked by user ${request.user.id}`,
+      ip_address: request.ip,
+      user_agent: request.headers['user-agent'] || 'Mozilla/5.0',
+    });
+
+    return ResponseData.success(data, 'Document liked successfully');
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @Post(':id/dislike')
+  @ApiOperation({ summary: 'Dislike tài liệu' })
+  @ApiParam({ name: 'id', description: 'ID của tài liệu' })
+  @ApiResponse({
+    status: 200,
+    description: 'Tài liệu đã được dislike thành công',
+  })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy tài liệu' })
+  @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+  async dislikeDocument(
+    @Param('id') id: string,
+    @Req() request: RequestWithUser,
+  ) {
+    const data = await this.documentService.dislikeDocument(id);
+
+    await this.documentAuditLogService.create({
+      document_id: id,
+      user_id: request.user.id,
+      action_type: 'DISLIKE_DOCUMENT',
+      action_details: `Document ${id} disliked by user ${request.user.id}`,
+      ip_address: request.ip,
+      user_agent: request.headers['user-agent'] || 'Mozilla/5.0',
+    });
+
+    return ResponseData.success(data, 'Document disliked successfully');
+  }
 }

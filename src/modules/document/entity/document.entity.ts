@@ -141,8 +141,7 @@ export class Document extends BaseEntity {
   @BeforeUpdate()
   setRating() {
     if (this.ratingCount > 0) {
-      const total = this.likeCount + this.dislikeCount;
-      this.rating = Math.round((this.likeCount / total) * 100);
+      this.rating = Math.round((this.likeCount / this.ratingCount) * 100);
     } else {
       this.rating = 0;
     }
