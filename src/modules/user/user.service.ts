@@ -231,7 +231,7 @@ export class UserService {
     });
 
     if (!user) {
-      throw new NotFoundException(`User with username ${username} not found`);
+      throw new NotFoundException(`Tên đăng nhập ${username} không tồn tại`);
     }
 
     return user;
@@ -258,7 +258,7 @@ export class UserService {
     });
 
     if (existingUser) {
-      throw new ConflictException('Username already exists');
+      throw new ConflictException('Tên đăng nhập đã tồn tại');
     }
 
     const hashedPassword = await argon2.hash(password);

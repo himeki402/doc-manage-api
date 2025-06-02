@@ -74,7 +74,7 @@ export class AuthController {
       if (request.res) {
         request.res.setHeader('Set-Cookie', cookie);
       }
-      return ResponseData.success(user, 'User logged in successfully');
+      return ResponseData.success(user, 'Người dùng đã đăng nhập thành công');
     } catch (error) {
       return ResponseData.error(error.message, error.statusCode);
     }

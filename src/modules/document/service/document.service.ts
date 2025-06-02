@@ -539,6 +539,8 @@ export class DocumentService {
         'document.thumbnailUrl',
         'document.rating',
         'document.ratingCount',
+        'document.likeCount',
+        'document.dislikeCount',
         'document.view',
         'document.mimeType',
         'document.fileUrl',
@@ -1133,6 +1135,9 @@ export class DocumentService {
         'document.ratingCount',
         'document.view',
         'document.mimeType',
+        'document.likeCount',
+        'document.dislikeCount',
+        'document.pageCount',
         'document.fileUrl',
         'document.slug',
         'documentTags.document_id',
@@ -1426,11 +1431,7 @@ export class DocumentService {
       });
 
     if (search) {
-      const searchQuery = search
-        .trim()
-        .replace(/[!*]/g, '') // Loại bỏ ký tự đặc biệt
-        .replace(/\s+/g, ' & ') // Nối các từ bằng AND
-        .replace(/'/g, "''"); // Thoát ký tự đơn
+      const searchQuery = this.sanitizeSearchQuery(search);
 
       queryBuilder.andWhere(
         `document.document_vector @@ to_tsquery('vietnamese', vn_unaccent(:searchQuery))`,
@@ -1492,6 +1493,21 @@ export class DocumentService {
       },
     };
   }
+
+  private sanitizeSearchQuery(search: string): string {
+    return search
+      .trim()
+      .replace(/[\\!*()&|:"'<>]/g, ' ')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' ')
+      .filter((word) => word.length > 0)
+      .map((word) => word.substring(0, 50))
+      .slice(0, 10)
+      .join(' & ');
+  }
+
   //Admin
   async getStats(): Promise<DocumentStatsResponseDto> {
     const now = new Date();
