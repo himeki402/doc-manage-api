@@ -412,7 +412,7 @@ export class DocumentService {
         formData,
         {
           headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 30000,
+          timeout: 60000,
         },
       );
 
@@ -1673,5 +1673,83 @@ export class DocumentService {
         excludeExtraneousValues: true,
       },
     );
+  }
+
+  async getFTSSearchSuggestions(
+    query: string,
+    limit: number = 10,
+  ): Promise<{
+    suggestions: string[];
+    documents: Array<{
+      id: string;
+      title: string;
+      description: string;
+      categoryName?: string;
+      createdByName?: string;
+      thumbnailUrl?: string;
+      accessType: string;
+      relevanceScore?: number;
+    }>;
+  }> {
+    if (!query || query.trim().length < 2) {
+      return { suggestions: [], documents: [] };
+    }
+
+    const sanitizedQuery = this.sanitizeSearchQuery(query);
+
+    const documentsWithScore = await this.documentRepository
+      .createQueryBuilder('document')
+      .leftJoinAndSelect('document.createdBy', 'createdBy')
+      .leftJoinAndSelect('document.category', 'category')
+      .select([
+        'document.id',
+        'document.title',
+        'document.description',
+        'document.accessType',
+        'document.thumbnailUrl',
+        'createdBy.name',
+        'category.name',
+      ])
+      .where('document.accessType = :accessType', {
+        accessType: DocumentType.PUBLIC,
+      })
+      .andWhere(
+        `document.document_vector @@ to_tsquery('vietnamese', vn_unaccent(:searchQuery))`,
+        { searchQuery: sanitizedQuery },
+      )
+      .addSelect(
+        `ts_rank_cd(document.document_vector, to_tsquery('vietnamese', vn_unaccent(:searchQuery)))`,
+        'relevance_score',
+      )
+      .orderBy('relevance_score', 'DESC')
+      .limit(limit)
+      .getRawAndEntities();
+
+    // Extract suggestions từ results
+    const suggestions = Array.from(
+      new Set([
+        ...documentsWithScore.entities.map((doc) => doc.title),
+        ...documentsWithScore.entities
+          .map((doc) => doc.category?.name)
+          .filter(
+            (name) => name && name.toLowerCase().includes(query.toLowerCase()),
+          ),
+      ]),
+    ).slice(0, limit);
+
+    const documents = documentsWithScore.entities.map((doc, index) => ({
+      id: doc.id,
+      title: doc.title,
+      description: doc.description
+        ? doc.description.substring(0, 150) + '...'
+        : '',
+      categoryName: doc.category?.name,
+      createdByName: doc.createdBy?.name,
+      thumbnailUrl: doc.thumbnailUrl,
+      accessType: doc.accessType,
+      relevanceScore: documentsWithScore.raw[index]?.relevance_score || 0,
+    }));
+
+    return { suggestions, documents };
   }
 }

@@ -142,6 +142,29 @@ export class DocumentController {
     return ResponseData.success(result, 'Documents searched successfully');
   }
 
+  @Public()
+  @ApiOperation({ summary: 'Lấy danh sách tài liệu theo từ khóa' })
+  @ApiQuery({ name: 'query', required: true, description: 'Từ khóa tìm kiếm' })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách tài liệu theo từ khóa đã được lấy thành công',
+  })
+  @Get('fts-search-suggestions')
+  async getFTSSearchSuggestions(
+    @Query('query') query: string,
+    @Query('limit') limit?: string,
+  ) {
+    const limitNumber = limit ? Math.min(parseInt(limit), 20) : 10;
+    const result = await this.documentService.getFTSSearchSuggestions(
+      query,
+      limitNumber,
+    );
+    return ResponseData.success(
+      result,
+      'FTS search suggestions retrieved successfully',
+    );
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN)
   @Get('admin')
