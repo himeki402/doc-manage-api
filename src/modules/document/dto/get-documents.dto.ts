@@ -28,10 +28,17 @@ export class GetDocumentsDto {
   @IsOptional()
   mimeType?: string;
 
-  @ApiProperty({ required: false, default: 'createdAt' })
+  @ApiProperty({ required: false, default: 'relevance' })
   @IsString()
   @IsOptional()
-  sortBy?: string = 'createdAt';
+  sortBy?:
+    | 'relevance'
+    | 'created_at'
+    | 'title'
+    | 'view'
+    | 'likeCount'
+    | 'rating'
+    | 'alphabetical';
 
   @ApiProperty({ required: false, default: 'DESC' })
   @IsString()

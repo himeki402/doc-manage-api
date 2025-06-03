@@ -165,6 +165,17 @@ export class DocumentController {
     );
   }
 
+  @Public()
+  @Get('search-categories')
+  @ApiOperation({ summary: 'Lấy danh sách các danh mục tìm kiếm' })
+  async getSearchCategories(@Query('query') query: string) {
+    const result = await this.documentService.getSearchCategories(query);
+    return ResponseData.success(
+      result,
+      'Search categories retrieved successfully',
+    );
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN)
   @Get('admin')

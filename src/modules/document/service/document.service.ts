@@ -9,7 +9,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import { Document } from '../entity/document.entity';
 import { CreateDocumentDto } from '../dto/createDocument.dto';
 import { UpdateDocumentDto } from '../dto/updateDocument.dto';
@@ -1394,9 +1394,17 @@ export class DocumentService {
     data: DocumentResponseDto[];
     meta: { total: number; page: number; limit: number; totalPages: number };
   }> {
-    const { page = 1, limit = 10, search, categoryId, tag } = query;
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      categoryId,
+      tag,
+      sortBy = 'created_at',
+      sortOrder = 'DESC',
+    } = query;
     const skip = (page - 1) * limit;
-
+    console.log('search', search, categoryId, tag, sortBy, sortOrder);
     const queryBuilder = this.documentRepository
       .createQueryBuilder('document')
       .leftJoinAndSelect('document.createdBy', 'createdBy')
@@ -1430,9 +1438,9 @@ export class DocumentService {
         accessType: DocumentType.PUBLIC,
       });
 
+    // Apply search filter
     if (search) {
       const searchQuery = this.sanitizeSearchQuery(search);
-
       queryBuilder.andWhere(
         `document.document_vector @@ to_tsquery('vietnamese', vn_unaccent(:searchQuery))`,
         { searchQuery },
@@ -1441,7 +1449,6 @@ export class DocumentService {
         `ts_rank_cd(document.document_vector, to_tsquery('vietnamese', vn_unaccent(:searchQuery)))`,
         'rank',
       );
-      queryBuilder.orderBy('rank', 'DESC');
     }
 
     if (categoryId) {
@@ -1449,14 +1456,53 @@ export class DocumentService {
     }
 
     if (tag) {
-      queryBuilder.andWhere('tag.id = :tag', { tag });
+      queryBuilder.andWhere(
+        'EXISTS (SELECT 1 FROM document_tags dt WHERE dt.document_id = document.id AND dt.tag_id = :tagId)',
+        { tagId: tag },
+      );
     }
 
-    const [documents, total] = await queryBuilder
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
+    queryBuilder.distinct(true);
 
+    this.applySorting(queryBuilder, sortBy, sortOrder, !!search);
+
+    const countQueryBuilder = this.documentRepository
+      .createQueryBuilder('document')
+      .select('COUNT(DISTINCT document.id)', 'count')
+      .where('document.accessType = :accessType', {
+        accessType: DocumentType.PUBLIC,
+      });
+
+    if (search) {
+      const searchQuery = this.sanitizeSearchQuery(search);
+      countQueryBuilder.andWhere(
+        `document.document_vector @@ to_tsquery('vietnamese', vn_unaccent(:searchQuery))`,
+        { searchQuery },
+      );
+    }
+
+    if (categoryId) {
+      countQueryBuilder
+        .leftJoin('document.category', 'category')
+        .andWhere('category.id = :categoryId', { categoryId });
+    }
+
+    if (tag) {
+      countQueryBuilder.andWhere(
+        'EXISTS (SELECT 1 FROM document_tags dt WHERE dt.document_id = document.id AND dt.tag_id = :tagId)',
+        { tagId: tag },
+      );
+    }
+
+    // Execute queries
+    const [documents, totalResult] = await Promise.all([
+      queryBuilder.skip(skip).take(limit).getMany(),
+      countQueryBuilder.getRawOne(),
+    ]);
+
+    const total = parseInt(totalResult.count);
+
+    // Transform data
     const data = documents.map((doc) => {
       const tags = doc.documentTags
         ? doc.documentTags.map((dt) => ({
@@ -1464,6 +1510,7 @@ export class DocumentService {
             name: dt.tag.name,
           }))
         : [];
+
       return plainToInstance(
         DocumentResponseDto,
         {
@@ -1472,7 +1519,6 @@ export class DocumentService {
           createdByName: doc.createdBy?.name,
           categoryId: doc.category?.id,
           categoryName: doc.category?.name,
-          categorySlug: doc.category?.slug,
           groupId: doc.group?.id,
           groupName: doc.group?.name,
           tags: tags,
@@ -1492,6 +1538,55 @@ export class DocumentService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  private applySorting(
+    queryBuilder: SelectQueryBuilder<any>,
+    sortBy: string,
+    sortOrder: string,
+    hasSearch: boolean,
+  ): void {
+    const order = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    switch (sortBy) {
+      case 'relevance':
+        if (hasSearch) {
+          queryBuilder.orderBy('rank', 'DESC');
+        } else {
+          queryBuilder.orderBy('document.created_at', order);
+        }
+        break;
+
+      case 'created_at':
+        queryBuilder.orderBy('document.created_at', order);
+        break;
+
+      case 'title':
+        queryBuilder.orderBy('document.title', order);
+        break;
+
+      case 'views':
+        queryBuilder.orderBy('document.view', order);
+        break;
+
+      case 'likes':
+        queryBuilder.orderBy('document.likeCount', order);
+        break;
+
+      case 'rating':
+        queryBuilder.orderBy('document.rating', order);
+        break;
+
+      default:
+        queryBuilder.orderBy('document.created_at', order);
+        break;
+    }
+
+    if (sortBy !== 'created_at') {
+      queryBuilder.addOrderBy('document.created_at', 'DESC');
+    }
+
+    queryBuilder.addOrderBy('document.id', 'ASC');
   }
 
   private sanitizeSearchQuery(search: string): string {
@@ -1751,5 +1846,74 @@ export class DocumentService {
     }));
 
     return { suggestions, documents };
+  }
+
+  async getSearchCategories(query: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      slug?: string;
+      documentCount: number;
+    }>
+  > {
+    if (!query || query.trim().length === 0) {
+      // If no search query, return all categories with public documents
+      const categories = await this.documentRepository
+        .createQueryBuilder('document')
+        .leftJoin('document.category', 'category')
+        .select([
+          'category.id',
+          'category.name',
+          'category.slug',
+          'COUNT(document.id) as documentCount',
+        ])
+        .where('document.accessType = :accessType', {
+          accessType: DocumentType.PUBLIC,
+        })
+        .andWhere('category.id IS NOT NULL')
+        .groupBy('category.id, category.name, category.slug')
+        .having('COUNT(document.id) > 0')
+        .orderBy('category.name', 'ASC')
+        .getRawMany();
+
+      return categories.map((cat) => ({
+        id: cat.category_id,
+        name: cat.category_name,
+        slug: cat.category_slug,
+        documentCount: parseInt(cat.documentCount),
+      }));
+    }
+
+    const searchQuery = this.sanitizeSearchQuery(query);
+
+    const categories = await this.documentRepository
+      .createQueryBuilder('document')
+      .leftJoin('document.category', 'category')
+      .select([
+        'category.id',
+        'category.name',
+        'category.slug',
+        'COUNT(document.id) as documentCount',
+      ])
+      .where('document.accessType = :accessType', {
+        accessType: DocumentType.PUBLIC,
+      })
+      .andWhere('category.id IS NOT NULL')
+      .andWhere(
+        `document.document_vector @@ to_tsquery('vietnamese', vn_unaccent(:searchQuery))`,
+        { searchQuery },
+      )
+      .groupBy('category.id, category.name, category.slug')
+      .having('COUNT(document.id) > 0')
+      .orderBy('COUNT(document.id)', 'DESC')
+      .addOrderBy('category.name', 'ASC')
+      .getRawMany();
+
+    return categories.map((cat) => ({
+      id: cat.category_id,
+      name: cat.category_name,
+      slug: cat.category_slug,
+      documentCount: parseInt(cat.documentCount),
+    }));
   }
 }
