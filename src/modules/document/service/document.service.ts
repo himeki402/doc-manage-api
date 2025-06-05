@@ -391,6 +391,12 @@ export class DocumentService {
       },
     );
   }
+
+  /**
+   * Trích xuất nội dung từ file PDF thông qua microservice
+   * @param fileUrl - URL của file PDF
+   * @returns Nội dung trích xuất và số trang
+   */
   private async extractPdfContentFromService(
     fileUrl: string,
   ): Promise<{ text: string; pageCount: number }> {
@@ -1573,6 +1579,10 @@ export class DocumentService {
         queryBuilder.orderBy('document.likeCount', order);
         break;
 
+      case 'pageCount':
+        queryBuilder.orderBy('document.pageCount', order);
+        break;
+
       case 'rating':
         queryBuilder.orderBy('document.rating', order);
         break;
@@ -1915,5 +1925,85 @@ export class DocumentService {
       slug: cat.category_slug,
       documentCount: parseInt(cat.documentCount),
     }));
+  }
+  async getUserDocumentStats(
+    userId: string,
+  ): Promise<DocumentStatsResponseDto> {
+    const now = new Date();
+
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(startOfThisMonth.getTime() - 1);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // 1. Tổng tài liệu của user
+    // const totalDocuments = await this.documentRepository
+    //   .createQueryBuilder('document')
+    //   .where('document.createdById = :userId', { userId })
+    //   .getCount();
+
+    // 2. Tài liệu mới trong tháng này
+    const newDocumentsThisMonth = await this.documentRepository
+      .createQueryBuilder('document')
+      .where('document.createdBy = :userId', { userId })
+      .andWhere('document.created_at >= :startOfThisMonth', {
+        startOfThisMonth,
+      })
+      .getCount();
+
+    // 3. Tài liệu mới trong tháng trước
+    const newDocumentsLastMonth = await this.documentRepository
+      .createQueryBuilder('document')
+      .where('document.createdBy = :userId', { userId })
+      .andWhere('document.created_at >= :startOfLastMonth', {
+        startOfLastMonth,
+      })
+      .andWhere('document.created_at <= :endOfLastMonth', { endOfLastMonth })
+      .getCount();
+
+    // 4. Tài liệu được chia sẻ (public documents)
+    const sharedDocuments = await this.documentRepository
+      .createQueryBuilder('document')
+      .where('document.createdBy = :userId', { userId })
+      .andWhere('document.accessType = :accessType', {
+        accessType: DocumentType.PUBLIC,
+      })
+      .getCount();
+
+    // 5. Tài liệu chia sẻ mới trong tuần này
+    const newSharedDocumentsThisWeek = await this.documentRepository
+      .createQueryBuilder('document')
+      .where('document.createdBy = :userId', { userId })
+      .andWhere('document.accessType = :accessType', {
+        accessType: DocumentType.PUBLIC,
+      })
+      .andWhere('document.created_at >= :sevenDaysAgo', { sevenDaysAgo })
+      .getCount();
+
+    // 6. Tài liệu gần đây (trong 7 ngày)
+    const recentDocuments = await this.documentRepository
+      .createQueryBuilder('document')
+      .where('document.createdBy = :userId', { userId })
+      .andWhere('document.created_at >= :sevenDaysAgo', { sevenDaysAgo })
+      .getCount();
+
+    // Tính toán tỉ lệ tăng trưởng
+    const growthCount = newDocumentsThisMonth - newDocumentsLastMonth;
+    const growthPercentage =
+      newDocumentsLastMonth > 0
+        ? Math.round((growthCount / newDocumentsLastMonth) * 100 * 100) / 100
+        : newDocumentsThisMonth > 0
+          ? 100
+          : 0;
+
+    return {
+      // totalDocuments,
+      newDocumentsThisMonth,
+      newDocumentsLastMonth,
+      growthPercentage,
+      growthCount,
+      sharedDocuments,
+      newSharedDocumentsThisWeek,
+      recentDocuments,
+    };
   }
 }

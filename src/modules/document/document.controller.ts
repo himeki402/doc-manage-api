@@ -36,7 +36,6 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { validate as isUUID } from 'uuid';
-import { create } from 'domain';
 import { DocumentAuditLogService } from './service/documentAuditLog.service';
 import { DocumentStatsResponseDto } from './dto/get-documents-stats.dto';
 import { plainToInstance } from 'class-transformer';
@@ -250,6 +249,25 @@ export class DocumentController {
       excludeExtraneousValues: true,
     });
     return ResponseData.success(data, 'Stats retrieved successfully');
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @Get('/user/stats')
+  @ApiOperation({ summary: 'Lấy thống kê tài liệu của người dùng' })
+  @ApiResponse({
+    status: 200,
+    description: 'Thống kê tài liệu của người dùng đã được lấy thành công',
+    type: DocumentStatsResponseDto,
+  })
+  async getUserDocumentStats(@Req() request: RequestWithUser) {
+    const result = await this.documentService.getUserDocumentStats(
+      request.user.id,
+    );
+    return ResponseData.success(
+      result,
+      'User document stats retrieved successfully',
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

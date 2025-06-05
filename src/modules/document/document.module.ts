@@ -45,8 +45,6 @@ import { TagModule } from '../tag/tag.module';
         const allowedMimeTypes = [
           'application/pdf',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-
-          // Image types
           'image/jpeg',
           'image/png',
           'image/gif',
@@ -54,6 +52,7 @@ import { TagModule } from '../tag/tag.module';
           'image/svg+xml',
           'image/tiff',
           'image/bmp',
+          'image/jpg',
         ];
 
         if (allowedMimeTypes.includes(file.mimetype)) {

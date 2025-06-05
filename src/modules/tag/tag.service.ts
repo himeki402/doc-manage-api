@@ -89,19 +89,49 @@ export class TagService {
   }
 
   async update(id: string, updateTagDto: UpdateTagDto): Promise<Tag> {
-    const tag = await this.findOne(id);
+    const queryRunner =
+      this.tagRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (updateTagDto.name && updateTagDto.name !== tag.name) {
-      const existingTag = await this.tagRepository.findOne({
-        where: { name: updateTagDto.name },
-      });
-      if (existingTag) {
-        throw new BadRequestException('Tag với tên này đã tồn tại');
+    try {
+      const tag = await queryRunner.manager.findOne(Tag, { where: { id } });
+
+      if (!tag) {
+        throw new NotFoundException('Không tìm thấy tag');
       }
-    }
 
-    Object.assign(tag, updateTagDto);
-    return this.tagRepository.save(tag);
+      if (updateTagDto.name && updateTagDto.name !== tag.name) {
+        const existingTag = await queryRunner.manager.findOne(Tag, {
+          where: { name: updateTagDto.name },
+        });
+        if (existingTag) {
+          throw new BadRequestException('Tag với tên này đã tồn tại');
+        }
+      }
+
+      const result = await queryRunner.manager
+        .createQueryBuilder()
+        .update(Tag)
+        .set(updateTagDto)
+        .where('id = :id', { id })
+        .execute();
+
+      await queryRunner.commitTransaction();
+
+      const updatedTag = await queryRunner.manager.findOne(Tag, {
+        where: { id },
+      });
+      if (!updatedTag) {
+        throw new NotFoundException('Không tìm thấy tag sau khi cập nhật');
+      }
+      return updatedTag;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async remove(id: string): Promise<void> {

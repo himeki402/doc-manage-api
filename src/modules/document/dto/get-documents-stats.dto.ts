@@ -7,33 +7,42 @@ export class DocumentStatsResponseDto {
     example: 1250,
   })
   @Expose()
-  totalDocuments: number;
+  totalDocuments?: number;
 
   @ApiProperty({
     description: 'Số tài liệu mới trong tháng hiện tại',
     example: 45,
   })
   @Expose()
-  newDocumentsThisMonth: number;
+  newDocumentsThisMonth?: number;
 
   @ApiProperty({
     description: 'Số tài liệu mới trong tháng trước',
     example: 38,
   })
   @Expose()
-  newDocumentsLastMonth: number;
+  newDocumentsLastMonth?: number;
 
   @ApiProperty({
     description: 'Phần trăm tăng trưởng so với tháng trước',
     example: 18.42,
   })
   @Expose()
-  growthPercentage: number;
+  growthPercentage?: number;
 
   @ApiProperty({
     description: 'Số lượng tài liệu tăng/giảm so với tháng trước',
     example: 7,
   })
   @Expose()
-  growthCount: number;
+  growthCount?: number;
+
+  @Expose()
+  sharedDocuments?: number;
+
+  @Expose()
+  newSharedDocumentsThisWeek?: number;
+
+  @Expose()
+  recentDocuments?: number;
 }
