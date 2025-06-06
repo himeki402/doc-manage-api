@@ -1,5 +1,4 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { DocumentController } from './document.controller';
 import { DocumentService } from './service/document.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../user/user.entity';
@@ -20,6 +19,8 @@ import { DocumentTag } from '../tag/document-tags.entity';
 import { DocumentTagService } from '../tag/tag.service';
 import { DocumentAuditLogService } from './service/documentAuditLog.service';
 import { TagModule } from '../tag/tag.module';
+import { DocumentController } from './controller/document.controller';
+import { DocumentAuditLogController } from './controller/documentAuditLog.controller';
 
 @Module({
   imports: [
@@ -68,7 +69,7 @@ import { TagModule } from '../tag/tag.module';
       },
     }),
   ],
-  controllers: [DocumentController],
+  controllers: [DocumentController, DocumentAuditLogController],
   providers: [
     DocumentService,
     AwsS3Service,

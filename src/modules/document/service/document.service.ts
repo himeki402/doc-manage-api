@@ -331,7 +331,7 @@ export class DocumentService {
       document_id: savedImage.id,
       user_id: userId,
       action_type: 'CREATE_IMAGE_DOCUMENT',
-      action_details: `Image document ${image.id} created by user ${userId}`,
+      action_details: `Tài liệu ảnh ${image.title} được tạo bởi người dùng ${userId}`,
       ip_address: '127.0.0.1',
       user_agent: 'Mozilla/5.0',
     });
@@ -821,7 +821,7 @@ export class DocumentService {
     // Trả về phản hồi xác nhận
     return {
       success: true,
-      message: `Document ${documentId} has been successfully removed from group ${previousGroupId} and set to private.`,
+      message: `Tài liệu có ID ${documentId} đã được gỡ bỏ khỏi nhóm ${previousGroupId} và được đặt thành riêng tư.`,
     };
   }
 
@@ -2004,6 +2004,65 @@ export class DocumentService {
       sharedDocuments,
       newSharedDocumentsThisWeek,
       recentDocuments,
+    };
+  }
+
+  async getDocumentSummaryAndContent(
+    id: string,
+    userId: string,
+  ): Promise<{
+    summary: string;
+    content: string;
+  }> {
+    const document = await this.documentRepository
+      .createQueryBuilder('document')
+      .leftJoinAndSelect('document.createdBy', 'createdBy')
+      .leftJoinAndSelect('document.group', 'group')
+      .select([
+        'document.id',
+        'document.title',
+        'document.content',
+        'document.accessType',
+        'document.summary',
+        'document.group',
+        'createdBy.id',
+        'group.id',
+      ])
+      .where('document.id = :id', { id })
+      .getOne();
+
+    if (!document) {
+      throw new HttpException('Document not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Kiểm tra quyền truy cập
+    if (document.accessType === DocumentType.PRIVATE) {
+      if (document.createdBy.id !== userId) {
+        throw new HttpException(
+          'Access denied. You do not have permission to access this document',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+    } else if (document.accessType === DocumentType.GROUP) {
+      const groupMember = document.group
+        ? await this.groupMemberRepository.findOne({
+            where: {
+              group_id: document.group.id,
+              user_id: userId,
+            },
+          })
+        : null;
+
+      if (!groupMember && document.createdBy.id !== userId) {
+        throw new HttpException(
+          'Access denied. You are not a member of this group',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+    }
+    return {
+      summary: document.summary || '',
+      content: document.content || '',
     };
   }
 }

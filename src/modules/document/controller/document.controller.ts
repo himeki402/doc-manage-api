@@ -15,16 +15,13 @@ import {
   Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { DocumentService } from './service/document.service';
-import { CreateDocumentDto } from './dto/createDocument.dto';
-import { UpdateDocumentDto } from './dto/updateDocument.dto';
-import JwtAuthGuard from '../auth/guard/jwt-auth.guard';
-import RequestWithUser from '../auth/interface/requestWithUser.interface';
+
+
 import { ResponseData } from 'src/helpers/response.helper';
-import { RolesGuard } from '../auth/guard/roles.guard';
+
 import { SystemRoles } from 'src/decorator/systemRoles.decorator';
 import { SystemRole } from 'src/common/enum/systemRole.enum';
-import { GetDocumentsDto } from './dto/get-documents.dto';
+
 import { Public } from 'src/decorator/public.decorator';
 import {
   ApiTags,
@@ -36,9 +33,17 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { validate as isUUID } from 'uuid';
-import { DocumentAuditLogService } from './service/documentAuditLog.service';
-import { DocumentStatsResponseDto } from './dto/get-documents-stats.dto';
+
 import { plainToInstance } from 'class-transformer';
+import { DocumentService } from '../service/document.service';
+import { DocumentAuditLogService } from '../service/documentAuditLog.service';
+import { RolesGuard } from 'src/modules/auth/guard/roles.guard';
+import JwtAuthGuard from 'src/modules/auth/guard/jwt-auth.guard';
+import { CreateDocumentDto } from '../dto/createDocument.dto';
+import RequestWithUser from 'src/modules/auth/interface/requestWithUser.interface';
+import { GetDocumentsDto } from '../dto/get-documents.dto';
+import { DocumentStatsResponseDto } from '../dto/get-documents-stats.dto';
+import { UpdateDocumentDto } from '../dto/updateDocument.dto';
 
 @ApiTags('documents')
 @ApiBearerAuth()
@@ -397,6 +402,32 @@ export class DocumentController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
+  @Get(':id/summary-content')
+  @ApiOperation({ summary: 'Lấy nội dung tóm tắt của tài liệu' })
+  @ApiParam({ name: 'id', description: 'ID của tài liệu' })
+  @ApiResponse({
+    status: 200,
+    description: 'Nội dung tóm tắt của tài liệu đã được lấy thành công',
+  })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy tài liệu' })
+  async getSummaryContent(
+    @Param('id') id: string,
+    @Req() request: RequestWithUser,
+  ) {
+    if (!isUUID(id)) {
+      throw new BadRequestException(
+        'Invalid document ID: must be a valid UUID',
+      );
+    }
+    const data = await this.documentService.getDocumentSummaryAndContent(
+      id,
+      request.user.id,
+    );
+    return ResponseData.success(data, 'Summary content retrieved successfully');
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
   @Put(':id')
   @ApiOperation({ summary: 'Cập nhật thông tin tài liệu' })
   @ApiParam({ name: 'id', description: 'ID của tài liệu' })
@@ -448,13 +479,13 @@ export class DocumentController {
       document_id: id,
       user_id: request.user.id,
       action_type: 'REMOVE_DOCUMENT_FROM_GROUP',
-      action_details: `Document ${id} removed from group by user ${request.user.id}`,
+      action_details: `Tài liệu ${id} đã được gỡ khỏi nhóm bởi người dùng ${request.user.id}`,
       ip_address: request.ip,
       user_agent: request.headers['user-agent'] || 'Mozilla/5.0',
     });
     return ResponseData.success(
       null,
-      'Document removed from group successfully',
+      'Tài liệu đã được gỡ khỏi nhóm thành công',
     );
   }
 

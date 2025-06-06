@@ -104,11 +104,24 @@ export class DocumentAuditLogService {
       throw new NotFoundException(`Document with ID ${documentId} not found`);
     }
 
-    return this.documentAuditLogRepository.find({
-      where: { document: { id: documentId } },
-      relations: ['document', 'user'],
-      order: { timestamp: 'DESC' }, // Sắp xếp theo thời gian giảm dần
-    });
+    return this.documentAuditLogRepository
+      .createQueryBuilder('document_audit_log')
+      .leftJoinAndSelect('document_audit_log.document', 'document')
+      .leftJoinAndSelect('document_audit_log.user', 'user')
+      .select([
+        'document_audit_log.log_id',
+        'document_audit_log.action_type',
+        'document_audit_log.action_details',
+        'document_audit_log.timestamp',
+        'document.id',
+        'document.title',
+        'document.description',
+        'user.id',
+        'user.name',
+      ])
+      .where('document_audit_log.document = :documentId', { documentId })
+      .orderBy('document_audit_log.timestamp', 'DESC')
+      .getMany();
   }
 
   /**
