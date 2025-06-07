@@ -21,6 +21,7 @@ import { DocumentAuditLogService } from './service/documentAuditLog.service';
 import { TagModule } from '../tag/tag.module';
 import { DocumentController } from './controller/document.controller';
 import { DocumentAuditLogController } from './controller/documentAuditLog.controller';
+import { DocumentVersionService } from './service/documentVersion.service';
 
 @Module({
   imports: [
@@ -77,6 +78,7 @@ import { DocumentAuditLogController } from './controller/documentAuditLog.contro
     DocumentTagService,
     DocumentAuditLogService,
     ThumbnailService,
+    DocumentVersionService,
   ],
   exports: [TypeOrmModule],
 })
