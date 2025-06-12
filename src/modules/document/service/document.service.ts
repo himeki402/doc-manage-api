@@ -540,6 +540,7 @@ export class DocumentService {
         'document.id',
         'document.title',
         'document.description',
+        'document.content',
         'document.accessType',
         'document.created_at',
         'document.thumbnailUrl',
@@ -1935,13 +1936,12 @@ export class DocumentService {
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(startOfThisMonth.getTime() - 1);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    // 1. Tổng tài liệu của user
-    // const totalDocuments = await this.documentRepository
-    //   .createQueryBuilder('document')
-    //   .where('document.createdById = :userId', { userId })
-    //   .getCount();
 
-    // 2. Tài liệu mới trong tháng này
+    const totalDocuments = await this.documentRepository
+      .createQueryBuilder('document')
+      .where('document.createdBy = :userId', { userId })
+      .getCount();
+
     const newDocumentsThisMonth = await this.documentRepository
       .createQueryBuilder('document')
       .where('document.createdBy = :userId', { userId })
@@ -1996,7 +1996,7 @@ export class DocumentService {
           : 0;
 
     return {
-      // totalDocuments,
+      totalDocuments,
       newDocumentsThisMonth,
       newDocumentsLastMonth,
       growthPercentage,

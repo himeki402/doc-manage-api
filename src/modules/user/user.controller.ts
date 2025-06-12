@@ -11,6 +11,7 @@ import {
   BadRequestException,
   Patch,
   Body,
+  NotFoundException,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserResponseDto } from './dto/response-user.dto';
@@ -97,7 +98,7 @@ export class UserController {
     return ResponseData.success(data, 'Avatar đã được upload thành công');
   }
 
-  @Patch(':id')
+  @Patch('profile')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SystemRoles(SystemRole.ADMIN, SystemRole.USER)
   @ApiOperation({
@@ -112,9 +113,17 @@ export class UserController {
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async updateUser(
-    @Param('id') id: string,
     @Body() userData: UserUpdateDTO,
-  ): Promise<UserResponseDto> {
-    return this.userService.updateUser(id, userData);
+    @Req() request: RequestWithUser,
+  ) {
+    const user = await this.userService.findById(request.user.id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const data = await this.userService.updateUser(request.user.id, userData);
+    return ResponseData.success(
+      data,
+      'Thông tin người dùng đã được cập nhật thành công',
+    );
   }
 }
