@@ -1623,6 +1623,9 @@ export class DocumentService {
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
     const endOfLastMonth = new Date(startOfThisMonth.getTime() - 1);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
     const totalDocuments = await this.documentRepository.count();
     const newDocumentsThisMonth = await this.documentRepository
       .createQueryBuilder('document')
@@ -1634,6 +1637,20 @@ export class DocumentService {
       .where('document.created_at >= :startOfLastMonth', { startOfLastMonth })
       .andWhere('document.created_at <= :endOfLastMonth', { endOfLastMonth })
       .getCount();
+
+    const recentDocuments = await this.documentRepository
+      .createQueryBuilder('document')
+      .where('document.created_at >= :sevenDaysAgo', { sevenDaysAgo })
+      .getCount();
+
+    // Tài liệu mới theo ngày (cho biểu đồ đường)
+    const documentsByDay = await this.documentRepository
+      .createQueryBuilder('document')
+      .select('DATE(document.created_at) as date, COUNT(*) as count')
+      .where('document.created_at >= :thirtyDaysAgo', { thirtyDaysAgo })
+      .groupBy('DATE(document.created_at)')
+      .orderBy('date', 'ASC')
+      .getRawMany();
 
     const growthCount = newDocumentsThisMonth - newDocumentsLastMonth;
 
@@ -1650,6 +1667,11 @@ export class DocumentService {
       newDocumentsLastMonth,
       growthPercentage,
       growthCount,
+      recentDocuments,
+      documentsByDay: documentsByDay.map((doc) => ({
+        date: doc.date,
+        count: parseInt(doc.count),
+      })),
     };
   }
 
@@ -1931,17 +1953,19 @@ export class DocumentService {
     userId: string,
   ): Promise<DocumentStatsResponseDto> {
     const now = new Date();
-
     const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(startOfThisMonth.getTime() - 1);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
+    // 1. Tổng số tài liệu
     const totalDocuments = await this.documentRepository
       .createQueryBuilder('document')
       .where('document.createdBy = :userId', { userId })
       .getCount();
 
+    // 2. Tài liệu mới trong tháng này
     const newDocumentsThisMonth = await this.documentRepository
       .createQueryBuilder('document')
       .where('document.createdBy = :userId', { userId })
@@ -1960,7 +1984,7 @@ export class DocumentService {
       .andWhere('document.created_at <= :endOfLastMonth', { endOfLastMonth })
       .getCount();
 
-    // 4. Tài liệu được chia sẻ (public documents)
+    // 4. Tài liệu công khai
     const sharedDocuments = await this.documentRepository
       .createQueryBuilder('document')
       .where('document.createdBy = :userId', { userId })
@@ -1969,7 +1993,7 @@ export class DocumentService {
       })
       .getCount();
 
-    // 5. Tài liệu chia sẻ mới trong tuần này
+    // 5. Tài liệu mới chia sẻ trong 7 ngày
     const newSharedDocumentsThisWeek = await this.documentRepository
       .createQueryBuilder('document')
       .where('document.createdBy = :userId', { userId })
@@ -1979,12 +2003,22 @@ export class DocumentService {
       .andWhere('document.created_at >= :sevenDaysAgo', { sevenDaysAgo })
       .getCount();
 
-    // 6. Tài liệu gần đây (trong 7 ngày)
+    // 6. Tài liệu gần đây (7 ngày)
     const recentDocuments = await this.documentRepository
       .createQueryBuilder('document')
       .where('document.createdBy = :userId', { userId })
       .andWhere('document.created_at >= :sevenDaysAgo', { sevenDaysAgo })
       .getCount();
+
+    // 7. Tài liệu mới theo ngày (cho biểu đồ đường)
+    const documentsByDay = await this.documentRepository
+      .createQueryBuilder('document')
+      .select('DATE(document.created_at) as date, COUNT(*) as count')
+      .where('document.createdBy = :userId', { userId })
+      .andWhere('document.created_at >= :thirtyDaysAgo', { thirtyDaysAgo })
+      .groupBy('DATE(document.created_at)')
+      .orderBy('date', 'ASC')
+      .getRawMany();
 
     // Tính toán tỉ lệ tăng trưởng
     const growthCount = newDocumentsThisMonth - newDocumentsLastMonth;
@@ -1999,11 +2033,15 @@ export class DocumentService {
       totalDocuments,
       newDocumentsThisMonth,
       newDocumentsLastMonth,
-      growthPercentage,
-      growthCount,
       sharedDocuments,
       newSharedDocumentsThisWeek,
       recentDocuments,
+      growthPercentage,
+      growthCount,
+      documentsByDay: documentsByDay.map((item) => ({
+        date: item.date,
+        count: parseInt(item.count, 10),
+      })),
     };
   }
 

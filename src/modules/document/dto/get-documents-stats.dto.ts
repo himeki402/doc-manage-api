@@ -45,4 +45,13 @@ export class DocumentStatsResponseDto {
 
   @Expose()
   recentDocuments?: number;
+
+  @Expose()
+  documentsByDay?: { date: string; count: number }[];
+
+  @Expose()
+  documentsByType?: { type: string; count: number }[];
+
+  @Expose()
+  documentsByMonth?: { month: string; count: number }[];
 }
