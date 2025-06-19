@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { User } from './user.entity';
 import { Document } from '../document/entity/document.entity';
 import * as argon2 from 'argon2';
+import * as crypto from 'crypto';
 import { CreateUserDTO } from './dto/create-user.dto';
 import { UserResponseDto } from './dto/response-user.dto';
 import { UserUpdateDTO } from './dto/update-user.dto';
@@ -17,16 +18,131 @@ import { plainToInstance } from 'class-transformer';
 import { UserStatus } from 'src/common/enum/permissionType.enum';
 import { GetUsersDto } from './dto/get-users.dto';
 import { CloudinaryService } from '../document/service/cloudinary.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class UserService {
+  private readonly encryptionKey: string;
+  private readonly algorithm = 'aes-256-gcm';
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(Document)
     private readonly documentRepository: Repository<Document>,
     private readonly cloudinaryService: CloudinaryService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.encryptionKey =
+      this.configService.get<string>('ENCRYPTION_KEY') ||
+      crypto.randomBytes(32).toString('hex');
+  }
+
+  /**
+   * Mã hóa dữ liệu nhạy cảm
+   * @param text - Văn bản cần mã hóa
+   * @returns Chuỗi đã mã hóa kèm IV và tag
+   */
+  private encrypt(text: string): string {
+    if (!text) return text;
+
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(
+      this.algorithm,
+      Buffer.from(this.encryptionKey, 'hex'),
+      iv,
+    );
+
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+
+    const authTag = cipher.getAuthTag();
+
+    // Kết hợp IV, authTag và dữ liệu đã mã hóa
+    return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+  }
+
+  /**
+   * Giải mã dữ liệu
+   * @param encryptedText - Chuỗi đã mã hóa
+   * @returns Văn bản gốc
+   */
+  private decrypt(encryptedText: string): string {
+    if (!encryptedText || !encryptedText.includes(':')) return encryptedText;
+
+    try {
+      const parts = encryptedText.split(':');
+      if (parts.length !== 3) return encryptedText;
+
+      const iv = Buffer.from(parts[0], 'hex');
+      const authTag = Buffer.from(parts[1], 'hex');
+      const encrypted = parts[2];
+
+      const decipher = crypto.createDecipheriv(
+        this.algorithm,
+        Buffer.from(this.encryptionKey, 'hex'),
+        iv,
+      );
+      decipher.setAuthTag(authTag);
+
+      let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+
+      return decrypted;
+    } catch (error) {
+      console.error('Decryption error:', error);
+      return encryptedText; // Trả về dữ liệu gốc nếu không giải mã được
+    }
+  }
+
+  /**
+   * Mã hóa thông tin nhạy cảm của user trước khi lưu
+   * @param user - User object
+   * @returns User object với thông tin đã mã hóa
+   */
+  private encryptSensitiveUserData(user: Partial<User>): Partial<User> {
+    const encryptedUser = { ...user };
+
+    // Mã hóa các trường nhạy cảm
+    if (encryptedUser.email) {
+      encryptedUser.email = this.encrypt(encryptedUser.email);
+    }
+    if (encryptedUser.phone) {
+      encryptedUser.phone = this.encrypt(encryptedUser.phone);
+    }
+    if (encryptedUser.address) {
+      encryptedUser.address = this.encrypt(encryptedUser.address);
+    }
+    if (encryptedUser.bio) {
+      encryptedUser.bio = this.encrypt(encryptedUser.bio);
+    }
+
+    return encryptedUser;
+  }
+
+  /**
+   * Giải mã thông tin nhạy cảm của user sau khi lấy từ DB
+   * @param user - User object từ database
+   * @returns User object với thông tin đã giải mã
+   */
+  private decryptSensitiveUserData(user: User): User {
+    const decryptedUser = { ...user };
+
+    // Giải mã các trường nhạy cảm
+    if (decryptedUser.email) {
+      decryptedUser.email = this.decrypt(decryptedUser.email);
+    }
+    if (decryptedUser.phone) {
+      decryptedUser.phone = this.decrypt(decryptedUser.phone);
+    }
+    if (decryptedUser.address) {
+      decryptedUser.address = this.decrypt(decryptedUser.address);
+    }
+    if (decryptedUser.bio) {
+      decryptedUser.bio = this.decrypt(decryptedUser.bio);
+    }
+
+    return decryptedUser;
+  }
 
   /**
    * Retrieve all users with their group memberships and document counts.
@@ -356,7 +472,7 @@ export class UserService {
       await this.cloudinaryService.uploadAvatar(avatarBuffer);
     const updates: Partial<User> = {
       avatar: avatarResult.url,
-      avatarKey: avatarResult.public_id, 
+      avatarKey: avatarResult.public_id,
     };
 
     await this.userRepository.update(userId, updates);
