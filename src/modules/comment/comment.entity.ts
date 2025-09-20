@@ -25,8 +25,8 @@ export class Comment {
   updated_at: Date;
   @Column({ type: 'uuid', nullable: true })
   parent_comment_id?: string;
-  // Relations
 
+  // Relations
   @ManyToOne(() => Document, (document) => document.comments, {
     onDelete: 'CASCADE',
   })
