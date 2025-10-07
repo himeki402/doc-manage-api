@@ -13,12 +13,13 @@ export class CommentController {
 
   @UseGuards(JwtAuthGuard)
   @SystemRoles(SystemRole.USER)
+  @Post()
   async createComment(
     @Body() createCommentDto: CreateCommentDto,
     @Req() request: RequestWithUser,
   ) {
     createCommentDto.userId = request.user.id;
-    await this.commentService.createComment(createCommentDto);
-    return ResponseData.success('Create comment successfully');
+    const data = await this.commentService.createComment(createCommentDto);
+    return ResponseData.success(data, 'Create comment successfully');
   }
 }

@@ -23,7 +23,7 @@ export class CommentService {
     createCommentDto: CreateCommentDto,
   ): Promise<CommentResponseDto> {
     const { userId, documentId, content, parentCommentId } = createCommentDto;
-
+    console.log(createCommentDto);
     //validate document
     const document = await this.documentRepository.findOne({
       where: { id: documentId },
